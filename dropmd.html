@@ -1,0 +1,2691 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>dropmd — minimalist markdown studio</title>
+
+  <!-- Dynamic SVG Favicon: 'dl' monogram (black in light mode, white in dark mode) -->
+  <link id="dynamicFavicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cstyle%3Epath,rect%7Bfill:%23000000%7D@media(prefers-color-scheme:dark)%7Bpath,rect%7Bfill:%23ffffff%7D%7D%3C/style%3E%3Crect x='70' y='22' width='11' height='58'/%3E%3Cpath fill-rule='evenodd' d='M 62.5,28.5 L 62.5,80 L 41.5,80 A 20,20 0 0,1 41.5,40 L 51.5,40 L 51.5,28.5 Z M 41.5,50.5 A 9.5,9.5 0 1,0 41.5,69.5 A 9.5,9.5 0 1,0 41.5,50.5 Z'/%3E%3C/svg%3E">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS Framework -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Marked.js Markdown Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- DOMPurify Security Sanitizer -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+  <!-- Highlight.js Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" id="hljs-light-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <!-- KaTeX LaTeX Math Engine -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <!-- Mermaid.js for Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+
+  <style>
+    :root {
+      --bg-canvas: #ffffff;
+      --bg-surface: #fafafa;
+      --bg-surface-subtle: #f4f4f6;
+      --border-hairline: #e4e4e7;
+      --border-hairline-subtle: #f4f4f6;
+      --text-ink: #09090b;
+      --text-muted: #71717a;
+      --text-faint: #a1a1aa;
+      --accent-color: #09090b;
+      --code-bg: #f8fafc;
+      --selection-bg: #e4e4e7;
+      --blockquote-bg: #fcfcfc;
+      --table-stripe: #fafafa;
+
+      --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.2);
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="dark"] {
+      --bg-canvas: #09090b;
+      --bg-surface: #121215;
+      --bg-surface-subtle: #18181c;
+      --border-hairline: #27272a;
+      --border-hairline-subtle: #1f1f23;
+      --text-ink: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-faint: #71717a;
+      --accent-color: #fafafa;
+      --code-bg: #141417;
+      --selection-bg: #27272a;
+      --blockquote-bg: #111114;
+      --table-stripe: #121215;
+    }
+
+    * {
+      border-color: var(--border-hairline);
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-ink);
+      font-family: 'Inter', sans-serif;
+      transition: background-color 0.3s var(--ease-smooth), color 0.3s var(--ease-smooth);
+    }
+    ::selection {
+      background-color: var(--selection-bg);
+    }
+
+    /* Zero-lag hardware accelerated scrolling containers */
+    #previewPane, #markdownInput, #lineNumbers, #docListContainer, #tocListContainer {
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #lineNumbers, #markdownInput, #lineMeasureMirror {
+      font-family: 'JetBrains Mono', monospace !important;
+      font-size: 13px !important;
+      line-height: 24px !important;
+      box-sizing: border-box !important;
+      letter-spacing: 0;
+    }
+
+    #lineNumbers {
+      padding-top: 16px !important;
+      padding-bottom: 16px !important;
+      padding-left: 4px;
+      padding-right: 8px;
+      line-height: 24px !important;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #markdownInput {
+      padding-top: 16px !important;
+      padding-bottom: 16px !important;
+      padding-left: 14px;
+      padding-right: 16px;
+      line-height: 24px !important;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    #lineMeasureMirror {
+      position: absolute;
+      visibility: hidden;
+      height: auto;
+      pointer-events: none;
+      left: -9999px;
+      top: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .prose-preview > :first-child {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+
+    .prose-preview, 
+    .prose-preview *, 
+    .prose-preview pre, 
+    .prose-preview code, 
+    .prose-preview table,
+    .prose-preview p,
+    .prose-preview h1,
+    .prose-preview h2,
+    .prose-preview h3,
+    .prose-preview h4,
+    .prose-preview blockquote,
+    .prose-preview li,
+    .prose-preview a {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    button, input, select, textarea {
+      touch-action: manipulation;
+    }
+
+    button:not(:disabled) {
+      transition: transform 0.16s var(--ease-spring), background-color 0.18s var(--ease-smooth), color 0.18s var(--ease-smooth), border-color 0.18s var(--ease-smooth), box-shadow 0.18s var(--ease-smooth);
+    }
+    button:active:not(:disabled) {
+      transform: scale(0.93) translateY(1px);
+    }
+
+    @keyframes modalSpringIn {
+      0% { opacity: 0; transform: scale(0.92) translateY(12px); }
+      70% { transform: scale(1.01) translateY(-2px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    @keyframes dropdownSlideFade {
+      0% { opacity: 0; transform: translateY(-8px) scale(0.96); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes toastSpringUp {
+      0% { opacity: 0; transform: translateY(20px) scale(0.92); }
+      75% { transform: translateY(-3px) scale(1.02); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    @keyframes drawerSlideDown {
+      0% { opacity: 0; transform: translateY(-10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes gentlePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+
+    @keyframes dropTargetPulse {
+      0%, 100% { border-color: var(--text-ink); background-color: rgba(125, 125, 125, 0.08); }
+      50% { border-color: var(--text-muted); background-color: rgba(125, 125, 125, 0.14); }
+    }
+
+    @keyframes spinThemeIcon {
+      0% { transform: rotate(0deg) scale(0.7); opacity: 0; }
+      100% { transform: rotate(360deg) scale(1); opacity: 1; }
+    }
+
+    /* Heading pulse and glowing focus highlight */
+    @keyframes headingPulseLight {
+      0% {
+        background-color: transparent;
+      }
+      20% {
+        background-color: rgba(59, 130, 246, 0.20);
+        border-radius: 4px;
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.20);
+        transform: translateX(3px);
+      }
+      50% {
+        background-color: rgba(59, 130, 246, 0.12);
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+        transform: translateX(1.5px);
+      }
+      100% {
+        background-color: transparent;
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes headingPulseDark {
+      0% {
+        background-color: transparent;
+      }
+      20% {
+        background-color: rgba(96, 165, 250, 0.28);
+        border-radius: 4px;
+        box-shadow: 0 0 0 6px rgba(96, 165, 250, 0.28);
+        transform: translateX(3px);
+      }
+      50% {
+        background-color: rgba(96, 165, 250, 0.16);
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
+        transform: translateX(1.5px);
+      }
+      100% {
+        background-color: transparent;
+        box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+        transform: translateX(0);
+      }
+    }
+
+    .heading-target-highlight {
+      animation: headingPulseLight 1.8s var(--ease-out-expo) forwards;
+      transition: all 0.25s ease;
+    }
+
+    [data-theme="dark"] .heading-target-highlight {
+      animation-name: headingPulseDark;
+    }
+
+    @keyframes findMatchGlow {
+      0% { background-color: rgba(234, 179, 8, 0.45); box-shadow: 0 0 0 4px rgba(234, 179, 8, 0.45); border-radius: 4px; }
+      70% { background-color: rgba(234, 179, 8, 0.25); box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25); border-radius: 4px; }
+      100% { background-color: transparent; box-shadow: none; }
+    }
+
+    .find-highlight-active {
+      animation: findMatchGlow 1.8s var(--ease-out-expo) forwards;
+    }
+
+    .line-match-active {
+      background-color: #fef08a !important;
+      color: #854d0e !important;
+      font-weight: 700 !important;
+      border-radius: 3px;
+    }
+
+    [data-theme="dark"] .line-match-active {
+      background-color: #854d0e !important;
+      color: #fef08a !important;
+      font-weight: 700 !important;
+    }
+
+    .animate-modal { animation: modalSpringIn 0.28s var(--ease-out-expo) forwards; }
+    .animate-dropdown { animation: dropdownSlideFade 0.2s var(--ease-out-expo) forwards; transform-origin: top right; }
+    .animate-toast { animation: toastSpringUp 0.3s var(--ease-spring) forwards; }
+    .animate-drawer { animation: drawerSlideDown 0.22s var(--ease-out-expo) forwards; }
+    .animate-spin-icon { animation: spinThemeIcon 0.38s var(--ease-spring); }
+    .pulse-saving { animation: gentlePulse 1.2s infinite ease-in-out; }
+    .drop-active { animation: dropTargetPulse 1.8s infinite ease-in-out; }
+
+    .doc-item-row {
+      transition: transform 0.18s var(--ease-out-expo), background-color 0.15s ease, color 0.15s ease;
+    }
+    .doc-item-row:hover {
+      transform: translateX(3px);
+    }
+
+    .toc-item {
+      transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+      position: relative;
+    }
+    .toc-item.toc-active {
+      background-color: var(--bg-surface-subtle) !important;
+      color: var(--text-ink) !important;
+      font-weight: 600 !important;
+      border-left: 2.5px solid var(--text-ink) !important;
+      padding-left: 10px !important;
+    }
+
+    .view-mode-btn {
+      position: relative;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    #resizerDivider {
+      width: 4px;
+      background-color: var(--border-hairline);
+      cursor: col-resize;
+      touch-action: none;
+      position: relative;
+      flex-shrink: 0;
+      z-index: 15;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background-color 0.15s ease;
+    }
+    /* Extended 16px invisible grab area to eliminate accidental pointer release */
+    #resizerDivider::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -6px;
+      right: -6px;
+      cursor: col-resize;
+      z-index: 25;
+    }
+    #resizerDivider:hover, #resizerDivider.resizing {
+      background-color: var(--text-ink);
+    }
+
+    /* Global drag locking state to prevent text selection and cursor flickers */
+    body.is-resizing {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      cursor: col-resize !important;
+    }
+    body.is-resizing * {
+      cursor: col-resize !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      pointer-events: none !important;
+    }
+    body.is-resizing #resizerDivider {
+      pointer-events: auto !important;
+    }
+
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-hairline);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-faint);
+    }
+
+    .icon-svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 1.8;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+      transition: transform 0.2s var(--ease-spring), stroke 0.2s ease;
+    }
+    .icon-svg-lg {
+      width: 18px;
+      height: 18px;
+    }
+    button:hover .icon-svg {
+      transform: scale(1.08);
+    }
+
+    .prose-preview {
+      color: var(--text-ink);
+      line-height: 1.75;
+      font-size: 0.96rem;
+      word-break: break-word;
+      transition: opacity 0.15s ease;
+    }
+    .prose-preview h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin: 1.5rem 0 0.8rem 0;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border-hairline);
+      color: var(--text-ink);
+    }
+    .prose-preview h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 1.5rem 0 0.6rem 0;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border-hairline-subtle);
+      color: var(--text-ink);
+    }
+    .prose-preview h3 {
+      font-size: 1.18rem;
+      font-weight: 600;
+      margin: 1.3rem 0 0.5rem 0;
+      color: var(--text-ink);
+    }
+    .prose-preview h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 1.1rem 0 0.4rem 0;
+      color: var(--text-ink);
+    }
+    .prose-preview p {
+      margin-bottom: 1.15rem;
+    }
+    .prose-preview a {
+      color: var(--text-ink);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      font-weight: 500;
+      transition: opacity 0.15s ease;
+    }
+    .prose-preview a:hover {
+      opacity: 0.75;
+    }
+    .prose-preview ul {
+      list-style-type: disc;
+      padding-left: 1.4rem;
+      margin-bottom: 1.15rem;
+    }
+    .prose-preview ol {
+      list-style-type: decimal;
+      padding-left: 1.4rem;
+      margin-bottom: 1.15rem;
+    }
+    .prose-preview li {
+      margin-bottom: 0.3rem;
+    }
+    .prose-preview blockquote {
+      border-left: 3px solid var(--text-ink);
+      padding: 0.6rem 1rem;
+      margin: 1.2rem 0;
+      background: var(--blockquote-bg);
+      border-radius: 0 0.375rem 0.375rem 0;
+      color: var(--text-muted);
+    }
+    .prose-preview hr {
+      border: 0;
+      border-top: 1px solid var(--border-hairline);
+      margin: 2rem 0;
+    }
+    .prose-preview code:not(pre code) {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      background-color: var(--bg-surface-subtle);
+      padding: 0.15em 0.35em;
+      border-radius: 0.25rem;
+      border: 1px solid var(--border-hairline);
+    }
+    .prose-preview pre {
+      background-color: var(--code-bg);
+      border: 1px solid var(--border-hairline);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      position: relative;
+    }
+    .prose-preview pre code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      background: transparent;
+      padding: 0;
+    }
+    .prose-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.9rem;
+    }
+    .prose-preview th, .prose-preview td {
+      border: 1px solid var(--border-hairline);
+      padding: 0.55rem 0.85rem;
+      text-align: left;
+    }
+    .prose-preview th {
+      background-color: var(--bg-surface);
+      font-weight: 600;
+    }
+    .prose-preview tr:nth-child(even) td {
+      background-color: var(--table-stripe);
+    }
+    .prose-preview img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.375rem;
+      border: 1px solid var(--border-hairline);
+      margin: 1rem 0;
+    }
+
+    .prose-preview .task-item {
+      list-style-type: none;
+      margin-left: -1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+    .prose-preview .task-checkbox {
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 1.5px solid var(--text-faint);
+      border-radius: 3px;
+      display: grid;
+      place-content: center;
+      cursor: pointer;
+      background: transparent;
+      transition: all 0.18s var(--ease-spring);
+    }
+    .prose-preview .task-checkbox:hover {
+      border-color: var(--text-ink);
+      transform: scale(1.1);
+    }
+    .prose-preview .task-checkbox:checked {
+      background-color: var(--text-ink);
+      border-color: var(--text-ink);
+      transform: scale(1.05);
+    }
+    .prose-preview .task-checkbox:checked::after {
+      content: "";
+      width: 7px;
+      height: 4px;
+      border-left: 1.5px solid var(--bg-canvas);
+      border-bottom: 1.5px solid var(--bg-canvas);
+      transform: rotate(-45deg) translate(0.5px, -0.5px);
+    }
+
+    .callout-box {
+      border-left: 3px solid var(--text-ink);
+      background: var(--bg-surface);
+      border-radius: 0 0.5rem 0.5rem 0;
+      padding: 0.8rem 1rem;
+      margin: 1.25rem 0;
+      border-top: 1px solid var(--border-hairline);
+      border-right: 1px solid var(--border-hairline);
+      border-bottom: 1px solid var(--border-hairline);
+      transition: transform 0.2s ease;
+    }
+    .callout-box:hover {
+      transform: translateX(2px);
+    }
+    .callout-box.tip { border-left-color: #10b981; }
+    .callout-box.warning { border-left-color: #f59e0b; }
+    .callout-box.note { border-left-color: #3b82f6; }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: 0.3rem;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity 0.2s ease, transform 0.2s var(--ease-spring), color 0.15s ease, background-color 0.15s ease;
+    }
+    pre:hover .copy-btn {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .copy-btn:hover {
+      color: var(--text-ink);
+      border-color: var(--text-muted);
+      transform: scale(1.05);
+    }
+
+    .sidebar-drawer {
+      transition: width 0.25s var(--ease-out-expo), transform 0.25s var(--ease-out-expo), opacity 0.2s ease;
+    }
+    .backdrop-fade {
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    @media print {
+      body * { visibility: hidden; }
+      #previewPane, #previewPane * { visibility: visible; }
+      #previewPane {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      header, nav, #toolbar, #statusBar, #sidebar, #tocSidebar, #findReplaceBar {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- Top Navigation Bar -->
+  <header class="h-13 border-b flex items-center justify-between px-2.5 sm:px-4 shrink-0 z-30 transition-colors duration-200 select-none" style="background: var(--bg-canvas);">
+    <div class="flex items-center space-x-1.5 sm:space-x-2.5 min-w-0">
+      <!-- Documents Drawer Toggle Button -->
+      <button id="toggleSidebarBtn" title="Documents Shelf (Ctrl+\)" class="p-1.5 sm:p-2 rounded-md hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+
+      <!-- Brand Indicator with 'dl' logo -->
+      <div class="flex items-center gap-1.5 pr-2 border-r border-[var(--border-hairline)] select-none cursor-pointer" onclick="showToast('dropmd — minimalist markdown studio')">
+        <svg class="w-4 h-4 text-[var(--text-ink)] shrink-0 transition-transform duration-200 hover:scale-110" viewBox="0 0 100 100" fill="currentColor">
+          <rect x="70" y="22" width="11" height="58" />
+          <path fill-rule="evenodd" d="M 62.5,28.5 L 62.5,80 L 41.5,80 A 20,20 0 0,1 41.5,40 L 51.5,40 L 51.5,28.5 Z M 41.5,50.5 A 9.5,9.5 0 1,0 41.5,69.5 A 9.5,9.5 0 1,0 41.5,50.5 Z" />
+        </svg>
+        <span class="font-bold text-xs sm:text-sm tracking-tighter lowercase text-[var(--text-ink)]">dropmd</span>
+      </div>
+
+      <!-- Document Title Bar with live status indicator -->
+      <div class="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
+        <input 
+          id="docTitleInput" 
+          type="text" 
+          value="Untitled.md" 
+          placeholder="Document Title" 
+          class="text-xs font-medium bg-transparent px-1.5 sm:px-2 py-1 rounded border border-transparent hover:border-[var(--border-hairline)] focus:border-[var(--border-hairline)] focus:bg-[var(--bg-surface)] focus:outline-none truncate w-24 xs:w-32 sm:w-44 md:w-56 transition-all duration-150"
+        />
+        
+        <!-- Live Status Pill -->
+        <div id="saveStatusBadge" class="hidden lg:flex items-center space-x-1 text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface-subtle)] px-2 py-0.5 rounded-full transition-all duration-200">
+          <span id="saveStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors duration-200"></span>
+          <span id="saveStatusIndicator">Saved</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Mode Switcher -->
+    <div class="flex items-center bg-[var(--bg-surface-subtle)] p-0.5 rounded border text-xs font-medium shrink-0 shadow-inner">
+      <button id="modeEditorBtn" title="Focus Editor" class="view-mode-btn px-2 sm:px-2.5 py-1 rounded flex items-center gap-1 text-[var(--text-muted)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span class="hidden sm:inline">Write</span>
+      </button>
+      <button id="modeSplitBtn" title="Dual Split View" class="view-mode-btn px-2 sm:px-2.5 py-1 rounded bg-[var(--bg-canvas)] text-[var(--text-ink)] shadow-xs flex items-center gap-1">
+        <svg class="icon-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+        <span class="hidden sm:inline">Split</span>
+      </button>
+      <button id="modePreviewBtn" title="Reader View" class="view-mode-btn px-2 sm:px-2.5 py-1 rounded flex items-center gap-1 text-[var(--text-muted)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span class="hidden sm:inline">Preview</span>
+      </button>
+    </div>
+
+    <!-- Right Control Tools -->
+    <div class="flex items-center space-x-0.5 sm:space-x-1 shrink-0">
+      <!-- Find & Replace Toggle -->
+      <button id="toggleFindReplaceBtn" title="Find & Replace (Ctrl+F)" class="p-1.5 sm:p-2 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+
+      <!-- Document Detailing (TOC) Toggle -->
+      <button id="toggleTocBtn" title="Document Detailing / Outline" class="p-1.5 sm:p-2 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 6h18M3 12h12M3 18h8"/></svg>
+      </button>
+
+      <!-- File Importer -->
+      <label class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)] cursor-pointer transition-transform active:scale-95" title="Import .md / .txt">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <input type="file" id="fileUploadInput" accept=".md,.txt,.markdown" class="hidden" />
+      </label>
+
+      <!-- Export Dropdown -->
+      <div class="relative">
+        <button id="exportDropdownBtn" class="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border hover:bg-[var(--bg-surface-subtle)] text-[var(--text-ink)]">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span class="hidden sm:inline">Export</span>
+          <svg id="exportArrowIcon" class="icon-svg transition-transform duration-200" style="width:10px;height:10px" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <div id="exportMenu" class="hidden absolute right-0 mt-1 w-44 rounded-lg shadow-xl py-1 z-50 text-xs border animate-dropdown" style="background: var(--bg-canvas);">
+          <button id="exportMdBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            Export as .md
+          </button>
+          <button id="exportHtmlBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Export as .html
+          </button>
+          <button id="exportPdfBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+            Print / PDF
+          </button>
+          <div class="h-px my-1" style="background: var(--border-hairline);"></div>
+          <button id="copyMarkdownBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy Raw Markdown
+          </button>
+          <button id="copyHtmlBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Copy Rendered HTML
+          </button>
+        </div>
+      </div>
+
+      <!-- Animated Day / Night Mode Toggle Button -->
+      <button id="themeToggleBtn" title="Switch Theme" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)] overflow-hidden">
+        <svg id="themeSunIcon" class="icon-svg hidden" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg id="themeMoonIcon" class="icon-svg" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
+
+      <!-- Keyboard Shortcuts Modal Button -->
+      <button id="openShortcutsBtn" title="Keyboard Shortcuts" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+        <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav id="toolbar" class="h-9 border-b flex items-center px-3 space-x-1 overflow-x-auto text-[var(--text-muted)] shrink-0 transition-colors duration-200 select-none" style="background: var(--bg-canvas);">
+    <button data-format="bold" title="Bold (Ctrl+B)" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 12a4 4 0 0 0 0-8H6v8Zm0 0a4 4 0 0 1 0 8H6v-8Z"/></svg>
+    </button>
+    <button data-format="italic" title="Italic (Ctrl+I)" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
+    </button>
+    <button data-format="strikethrough" title="Strikethrough" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16"/></svg>
+    </button>
+
+    <div class="h-3.5 w-px mx-1" style="background: var(--border-hairline);"></div>
+
+    <button data-format="h1" title="Heading 1" class="px-1.5 py-0.5 rounded text-xs font-semibold hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">H1</button>
+    <button data-format="h2" title="Heading 2" class="px-1.5 py-0.5 rounded text-xs font-semibold hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">H2</button>
+    <button data-format="h3" title="Heading 3" class="px-1.5 py-0.5 rounded text-xs font-semibold hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">H3</button>
+
+    <div class="h-3.5 w-px mx-1" style="background: var(--border-hairline);"></div>
+
+    <button data-format="quote" title="Blockquote" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1Zm12 0c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1Z"/></svg>
+    </button>
+    <button data-format="code-inline" title="Inline Code" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </button>
+    <button data-format="code-block" title="Code Block" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m10 10-2 2 2 2M14 10l2 2-2 2"/></svg>
+    </button>
+    <button data-format="link" title="Insert Link (Ctrl+K)" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    </button>
+    <button data-format="image" title="Insert Image" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+    </button>
+
+    <div class="h-3.5 w-px mx-1" style="background: var(--border-hairline);"></div>
+
+    <button data-format="ul" title="Bullet List" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></svg>
+    </button>
+    <button data-format="ol" title="Numbered List" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+    </button>
+    <button data-format="task" title="Interactive Task" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+    </button>
+    <button data-format="table" title="Insert Table" class="p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+    </button>
+    <button data-format="math" title="KaTeX Equation ($$)" class="px-1.5 py-0.5 rounded text-xs font-mono hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">∑</x</button>
+    <button data-format="diagram" title="Mermaid Diagram" class="px-1.5 py-0.5 rounded text-xs font-mono hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]">◈ flow</button>
+
+    <div class="flex-1"></div>
+
+    <!-- Dedicated Sync Scroll Ribbon Button -->
+    <button id="toolbarSyncScrollBtn" title="Toggle Synchronous Scrolling" class="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs border border-[var(--border-hairline)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)] transition-all cursor-pointer">
+      <span id="toolbarSyncStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors"></span>
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span class="hidden sm:inline text-[var(--text-muted)]">Sync:</span>
+      <span id="toolbarSyncScrollStatus" class="font-semibold text-emerald-600 dark:text-emerald-400">ON</span>
+    </button>
+
+    <div class="h-3.5 w-px mx-1" style="background: var(--border-hairline);"></div>
+
+    <!-- Text Size Adjusters & Clear Button -->
+    <button id="fontSizeDecBtn" title="Decrease Font Size" class="p-1 text-xs hover:text-[var(--text-ink)]">A-</button>
+    <button id="fontSizeIncBtn" title="Increase Font Size" class="p-1 text-xs hover:text-[var(--text-ink)]">A+</button>
+    <div class="h-3.5 w-px mx-1" style="background: var(--border-hairline);"></div>
+    <button id="clearEditorBtn" title="Clear All Text" class="text-xs hover:text-red-500 p-1 font-medium transition-colors">Clear</button>
+  </nav>
+
+  <div id="findReplaceBar" class="hidden border-b px-4 py-2 flex flex-wrap items-center gap-2 text-xs z-20 transition-all duration-200" style="background: var(--bg-surface);">
+    <div class="flex items-center border rounded px-2 py-1 bg-[var(--bg-canvas)] focus-within:ring-1 focus-within:ring-[var(--text-ink)] transition-shadow">
+      <input id="findInput" type="text" placeholder="Find..." class="bg-transparent focus:outline-none w-32 md:w-48 text-[var(--text-ink)]" />
+      <span id="findMatchCount" class="text-[10px] text-[var(--text-faint)] ml-1.5 font-mono">0/0</span>
+    </div>
+    <div class="flex items-center space-x-1">
+      <button id="findPrevBtn" type="button" title="Previous match (Up / Shift+Enter)" class="p-1 rounded border border-[var(--border-hairline)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)] transition-all">
+        <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button id="findNextBtn" type="button" title="Next match (Down / Enter)" class="p-1 rounded border border-[var(--border-hairline)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)] transition-all">
+        <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center border rounded px-2 py-1 bg-[var(--bg-canvas)] focus-within:ring-1 focus-within:ring-[var(--text-ink)] transition-shadow">
+      <input id="replaceInput" type="text" placeholder="Replace with..." class="bg-transparent focus:outline-none w-32 md:w-48 text-[var(--text-ink)]" />
+    </div>
+    <div class="flex items-center space-x-1">
+      <button id="replaceBtn" type="button" class="px-2 py-1 rounded border hover:bg-[var(--bg-surface-subtle)] transition-all">Replace</button>
+      <button id="replaceAllBtn" type="button" class="px-2 py-1 rounded border hover:bg-[var(--bg-surface-subtle)] transition-all">Replace All</button>
+    </div>
+    <button id="closeFindReplaceBtn" type="button" title="Close (Esc)" class="ml-auto p-1 text-[var(--text-muted)] hover:text-[var(--text-ink)] rounded hover:bg-[var(--bg-surface-subtle)]">
+      <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+    </button>
+  </div>
+
+  <main class="flex-1 flex overflow-hidden relative">
+
+    <!-- Documents Library Shelf -->
+    <aside id="sidebar" class="sidebar-drawer w-64 sm:w-72 border-r flex flex-col shrink-0 z-30 h-full shadow-2xl lg:shadow-none absolute lg:relative left-0 top-0 bottom-0 select-none" style="background: var(--bg-surface);">
+      <div class="p-3 border-b flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Documents</span>
+        </div>
+        <div class="flex items-center space-x-1">
+          <button id="newDocBtn" title="Create Blank Document" class="p-1 sm:p-1.5 hover:bg-[var(--bg-surface-subtle)] rounded flex items-center gap-1 text-xs">
+            <svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+            <span class="hidden sm:inline">New</span>
+          </button>
+          <button id="closeSidebarBtn" title="Close Shelf" class="p-1 sm:p-1.5 hover:bg-[var(--bg-surface-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+            <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-2 border-b">
+        <div class="flex items-center border rounded px-2 py-1 bg-[var(--bg-canvas)] focus-within:ring-1 focus-within:ring-[var(--text-ink)] transition-all">
+          <svg class="icon-svg text-[var(--text-faint)] mr-1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="searchDocsInput" type="text" placeholder="Search docs..." class="w-full text-xs bg-transparent focus:outline-none text-[var(--text-ink)]" />
+        </div>
+      </div>
+
+      <!-- File Shelf Container -->
+      <div id="docListContainer" class="flex-1 overflow-y-auto p-2 space-y-0.5"></div>
+    </aside>
+
+    <!-- Mobile Drawer Overlay Backdrop -->
+    <div id="sidebarBackdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-25 hidden backdrop-fade"></div>
+
+    <!-- Dedicated Split Workspace Wrapper -->
+    <div id="splitWorkspace" class="flex-1 flex h-full min-w-0 overflow-hidden relative">
+      <section id="editorContainer" class="flex-1 flex flex-col h-full relative border-r overflow-hidden min-w-0" style="background: var(--bg-canvas);">
+        <div id="dropZone" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center border-2 border-dashed border-[var(--text-ink)] m-4 rounded-lg drop-active" style="background: var(--bg-canvas); opacity: 0.95;">
+          <svg class="icon-svg-lg mb-2 text-[var(--text-ink)] animate-bounce" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <p class="text-xs font-semibold text-[var(--text-ink)]">Drop markdown file to load</p>
+        </div>
+
+        <div id="lineMeasureMirror"></div>
+
+        <div class="relative flex-1 flex overflow-hidden">
+          <div id="lineNumbers" class="w-10 sm:w-12 select-none text-right overflow-hidden shrink-0 border-r text-[var(--text-faint)] transition-colors duration-200" style="background: var(--bg-surface);">
+            <div style="height:24px;line-height:24px;">1</div>
+          </div>
+          <textarea 
+            id="markdownInput" 
+            spellcheck="false" 
+            placeholder="Start typing markdown..." 
+            class="w-full h-full bg-transparent resize-none focus:outline-none overflow-y-auto transition-colors duration-200"
+          ></textarea>
+        </div>
+      </section>
+
+      <!-- Draggable Divider -->
+      <div id="resizerDivider" class="hidden md:block" title="Drag to resize (Double click to reset 50:50)"></div>
+
+      <section id="previewContainer" class="flex-1 flex flex-col h-full overflow-hidden min-w-0" style="background: var(--bg-canvas);">
+        <div id="previewPane" class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pt-4 pb-12 prose-preview max-w-3xl mx-auto w-full select-text cursor-auto"></div>
+      </section>
+    </div>
+
+    <!-- Document Detailing (Table of Contents) Slide-in Sidebar -->
+    <aside id="tocSidebar" class="sidebar-drawer w-64 md:w-60 border-l flex-col shrink-0 hidden absolute right-0 top-0 bottom-0 md:static z-25 shadow-2xl md:shadow-none select-none" style="background: var(--bg-surface);">
+      <div class="p-3 border-b flex items-center justify-between">
+        <div class="flex items-center space-x-1.5">
+          <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><path d="M3 6h18M3 12h12M3 18h8"/></svg>
+          <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Document Detailing</span>
+        </div>
+        <button id="closeTocBtn" title="Close Detailing" class="p-1 sm:p-1.5 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text-ink)]">
+          <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="tocListContainer" class="flex-1 overflow-y-auto p-2.5 space-y-1 text-xs"></div>
+    </aside>
+
+  </main>
+
+  <footer id="statusBar" class="h-7 border-t flex items-center justify-between px-3 md:px-5 text-[11px] text-[var(--text-muted)] shrink-0 select-none transition-colors duration-200" style="background: var(--bg-canvas);">
+    <div class="flex items-center space-x-2 sm:space-x-3 overflow-hidden truncate">
+      <span id="cursorPosText">Ln 1, Col 1</span>
+      <span class="text-[var(--border-hairline)]">•</span>
+      <span id="charCountText">0 chars</span>
+      <span class="text-[var(--border-hairline)] hidden sm:inline">•</span>
+      <span id="totalLinesText" class="hidden sm:inline">1 lines</span>
+      <span class="text-[var(--border-hairline)]">•</span>
+      <span id="previewStatsWords" class="font-medium text-[var(--text-ink)]">0 words</span>
+      <span class="text-[var(--border-hairline)] hidden xs:inline">•</span>
+      <span id="previewStatsReadTime" class="hidden xs:inline">1 min read</span>
+    </div>
+
+    <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+      <button id="toggleSyncScrollBtn" class="flex items-center gap-1.5 px-2 py-0.5 rounded border border-[var(--border-hairline)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)] transition-all cursor-pointer" title="Toggle Synchronous Scrolling">
+        <span id="syncStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors"></span>
+        <svg id="syncIconSvg" class="icon-svg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span>Sync Scroll: <strong id="syncScrollStatus" class="font-semibold text-emerald-600 dark:text-emerald-400">ON</strong></span>
+      </button>
+      <span class="text-[var(--border-hairline)] hidden sm:inline">•</span>
+      <span class="hidden sm:inline">UTF-8</span>
+    </div>
+  </footer>
+
+  <!-- Link/Image Modal -->
+  <div id="customModal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden backdrop-fade select-none">
+    <div class="border rounded-xl max-w-sm w-full shadow-2xl overflow-hidden p-4 animate-modal" style="background: var(--bg-canvas);">
+      <h3 id="customModalTitle" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-ink)] mb-2">Insert</h3>
+      <div id="customModalBody" class="space-y-2 mb-4 text-xs">
+        <input id="modalInput1" type="text" placeholder="Title / Alt" class="w-full border rounded px-2.5 py-1.5 bg-[var(--bg-surface)] text-[var(--text-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--text-ink)] transition-shadow" />
+        <input id="modalInput2" type="text" placeholder="URL / Link" class="w-full border rounded px-2.5 py-1.5 bg-[var(--bg-surface)] text-[var(--text-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--text-ink)] transition-shadow" />
+      </div>
+      <div class="flex justify-end space-x-2 text-xs">
+        <button id="modalCancelBtn" class="px-3 py-1 rounded border hover:bg-[var(--bg-surface-subtle)]">Cancel</button>
+        <button id="modalConfirmBtn" class="px-3 py-1 rounded bg-[var(--text-ink)] text-[var(--bg-canvas)] font-medium hover:opacity-90">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shortcuts Modal -->
+  <div id="shortcutsModal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden backdrop-fade select-none">
+    <div class="border rounded-xl max-w-md w-full shadow-2xl overflow-hidden animate-modal" style="background: var(--bg-canvas);">
+      <div class="p-4 border-b flex items-center justify-between">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-ink)]">Keybindings</h3>
+        <button id="closeShortcutsModalBtn" class="p-1 rounded hover:bg-[var(--bg-surface-subtle)] text-[var(--text-muted)]">
+          <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="p-4 max-h-80 overflow-y-auto text-xs divide-y divide-[var(--border-hairline)]">
+        <div class="py-2 flex items-center justify-between"><span>Bold Text</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+B</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Italic Text</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+I</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Insert Link</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+K</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Find & Replace</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+F</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Toggle Documents Shelf</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+\</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Save Snapshot</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+S</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Indent / Outdent</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Tab / Shift+Tab</kbd></div>
+      </div>
+      <div class="p-3 border-t text-right" style="background: var(--bg-surface);">
+        <button id="closeShortcutsModalBtn2" class="px-3 py-1 bg-[var(--text-ink)] text-[var(--bg-canvas)] text-xs font-medium rounded hover:opacity-90">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="fixed bottom-10 right-5 z-50 flex flex-col space-y-2 pointer-events-none select-none"></div>
+
+  <script>
+    const FIRST_VISIT_TEMP_CONTENT = `# Welcome to dropmd
+
+A distraction-free markdown studio designed with an ultra-minimal plane layout, fluid animations, and real-time live preview.
+
+> [!NOTE]
+> This introductory document is loaded only on your first visit. You can edit this directly, click **Clear** in the ribbon, or delete this file from the left shelf to start with a blank workspace.
+
+---
+
+## ⚡ Mathematical Proofs (KaTeX)
+
+Inline equations such as $e^{i\\pi} + 1 = 0$ work alongside full display formulas:
+
+$$f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi$$
+
+---
+
+## 📋 Interactive Task Tracking
+
+- [x] Responsive split view editor
+- [x] Dynamic light/dark browser tab icon
+- [x] Synchronized line numbers and smooth scrolling
+- [ ] Document detailing instant jump and glowing highlight
+
+---
+
+## 💻 Algorithmic Code Highlighting
+
+\`\`\`javascript
+// Automatic instant local preservation
+function saveNote(content) {
+  localStorage.setItem('dropmd_docs', JSON.stringify(content));
+}
+\`\`\`
+`;
+
+    const State = {
+      docs: [],
+      activeDocId: null,
+      viewMode: 'split',
+      syncScroll: true,
+      isSidebarOpen: window.innerWidth >= 1024,
+      isTocOpen: false,
+      fontSize: 13,
+      theme: 'light',
+      findMatches: [],
+      currentMatchIdx: -1,
+      splitRatio: 50
+    };
+
+    const dom = {
+      docTitleInput: document.getElementById('docTitleInput'),
+      saveStatusBadge: document.getElementById('saveStatusBadge'),
+      saveStatusDot: document.getElementById('saveStatusDot'),
+      saveStatusIndicator: document.getElementById('saveStatusIndicator'),
+      markdownInput: document.getElementById('markdownInput'),
+      previewPane: document.getElementById('previewPane'),
+      lineNumbers: document.getElementById('lineNumbers'),
+      editorContainer: document.getElementById('editorContainer'),
+      previewContainer: document.getElementById('previewContainer'),
+      sidebar: document.getElementById('sidebar'),
+      sidebarBackdrop: document.getElementById('sidebarBackdrop'),
+      tocSidebar: document.getElementById('tocSidebar'),
+      docListContainer: document.getElementById('docListContainer'),
+      tocListContainer: document.getElementById('tocListContainer'),
+      searchDocsInput: document.getElementById('searchDocsInput'),
+      cursorPosText: document.getElementById('cursorPosText'),
+      totalLinesText: document.getElementById('totalLinesText'),
+      charCountText: document.getElementById('charCountText'),
+      previewStatsWords: document.getElementById('previewStatsWords'),
+      previewStatsReadTime: document.getElementById('previewStatsReadTime'),
+      toggleSyncScrollBtn: document.getElementById('toggleSyncScrollBtn'),
+      syncScrollStatus: document.getElementById('syncScrollStatus'),
+      syncStatusDot: document.getElementById('syncStatusDot'),
+      syncIconSvg: document.getElementById('syncIconSvg'),
+      toolbarSyncScrollBtn: document.getElementById('toolbarSyncScrollBtn'),
+      toolbarSyncScrollStatus: document.getElementById('toolbarSyncScrollStatus'),
+      toolbarSyncStatusDot: document.getElementById('toolbarSyncStatusDot'),
+      dropZone: document.getElementById('dropZone'),
+      exportDropdownBtn: document.getElementById('exportDropdownBtn'),
+      exportArrowIcon: document.getElementById('exportArrowIcon'),
+      exportMenu: document.getElementById('exportMenu'),
+      findReplaceBar: document.getElementById('findReplaceBar'),
+      findInput: document.getElementById('findInput'),
+      replaceInput: document.getElementById('replaceInput'),
+      findMatchCount: document.getElementById('findMatchCount'),
+      findNextBtn: document.getElementById('findNextBtn'),
+      findPrevBtn: document.getElementById('findPrevBtn'),
+      replaceBtn: document.getElementById('replaceBtn'),
+      replaceAllBtn: document.getElementById('replaceAllBtn'),
+      closeFindReplaceBtn: document.getElementById('closeFindReplaceBtn'),
+      themeSunIcon: document.getElementById('themeSunIcon'),
+      themeMoonIcon: document.getElementById('themeMoonIcon'),
+      customModal: document.getElementById('customModal'),
+      customModalTitle: document.getElementById('customModalTitle'),
+      modalInput1: document.getElementById('modalInput1'),
+      modalInput2: document.getElementById('modalInput2'),
+      modalCancelBtn: document.getElementById('modalCancelBtn'),
+      modalConfirmBtn: document.getElementById('modalConfirmBtn'),
+      shortcutsModal: document.getElementById('shortcutsModal'),
+      toastContainer: document.getElementById('toastContainer'),
+      resizerDivider: document.getElementById('resizerDivider')
+    };
+
+    function updateBrowserTabFavicon() {
+      const isBrowserDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const glyphColor = isBrowserDark ? '#ffffff' : '#000000';
+      
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <rect x="70" y="22" width="11" height="58" fill="${glyphColor}" />
+        <path fill-rule="evenodd" fill="${glyphColor}" d="M 62.5,28.5 L 62.5,80 L 41.5,80 A 20,20 0 0,1 41.5,40 L 51.5,40 L 51.5,28.5 Z M 41.5,50.5 A 9.5,9.5 0 1,0 41.5,69.5 A 9.5,9.5 0 1,0 41.5,50.5 Z" />
+      </svg>`;
+
+      let link = document.getElementById('dynamicFavicon');
+      if (!link) {
+        link = document.createElement('link');
+        link.id = 'dynamicFavicon';
+        link.rel = 'icon';
+        link.type = 'image/svg+xml';
+        document.head.appendChild(link);
+      }
+      link.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    if (window.matchMedia) {
+      try {
+        const darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        if (darkMediaQuery.addEventListener) {
+          darkMediaQuery.addEventListener('change', updateBrowserTabFavicon);
+        } else if (darkMediaQuery.addListener) {
+          darkMediaQuery.addListener(updateBrowserTabFavicon);
+        }
+      } catch (e) {}
+    }
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      fontFamily: 'Inter, sans-serif'
+    });
+
+    marked.setOptions({
+      gfm: true,
+      breaks: true,
+      highlight: function (code, lang) {
+        if (lang === 'mermaid') {
+          return `<div class="mermaid">${code}</div>`;
+        }
+        if (lang && hljs.getLanguage(lang)) {
+          try {
+            return hljs.highlight(code, { language: lang }).value;
+          } catch (e) {}
+        }
+        try {
+          return hljs.highlightAuto(code).value;
+        } catch (e) {}
+        return code;
+      }
+    });
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('dropmd_theme') || 'light';
+      setTheme(savedTheme, false);
+      updateBrowserTabFavicon();
+    }
+
+    function setTheme(theme, animate = true) {
+      State.theme = theme;
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('dropmd_theme', theme);
+
+      if (theme === 'dark') {
+        dom.themeSunIcon?.classList.remove('hidden');
+        dom.themeMoonIcon?.classList.add('hidden');
+        if (animate) dom.themeSunIcon?.classList.add('animate-spin-icon');
+        const hljsTheme = document.getElementById('hljs-light-theme');
+        if (hljsTheme) hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css';
+      } else {
+        dom.themeSunIcon?.classList.add('hidden');
+        dom.themeMoonIcon?.classList.remove('hidden');
+        if (animate) dom.themeMoonIcon?.classList.add('animate-spin-icon');
+        const hljsTheme = document.getElementById('hljs-light-theme');
+        if (hljsTheme) hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css';
+      }
+
+      setTimeout(() => {
+        dom.themeSunIcon?.classList.remove('animate-spin-icon');
+        dom.themeMoonIcon?.classList.remove('animate-spin-icon');
+      }, 400);
+
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: theme === 'dark' ? 'dark' : 'neutral',
+          fontFamily: 'Inter, sans-serif'
+        });
+      }
+
+      if (State.docs && State.docs.length > 0 && dom.markdownInput) {
+        renderMarkdown();
+      }
+    }
+
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      setTheme(State.theme === 'light' ? 'dark' : 'light', true);
+    });
+
+    function processMath(text) {
+      if (!text) return '';
+      const codeBlocks = [];
+      text = text.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_SLOT_${codeBlocks.length - 1}__`;
+      });
+
+      // Display Math $$...$$
+      text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+        try {
+          if (window.katex) {
+            return `<div class="my-3 text-center overflow-x-auto py-1">${katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false })}</div>`;
+          }
+        } catch (e) {
+          return match;
+        }
+        return match;
+      });
+
+      // Inline Math $...$
+      text = text.replace(/(?<!\\)\$([^\$\n]+?)\$/g, (match, formula) => {
+        try {
+          if (window.katex) {
+            return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
+          }
+        } catch (e) {
+          return match;
+        }
+        return match;
+      });
+
+      text = text.replace(/__CODE_BLOCK_SLOT_(\d+)__/g, (match, id) => {
+        return codeBlocks[parseInt(id, 10)] || match;
+      });
+
+      return text;
+    }
+
+    function processCallouts(html) {
+      return html.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]([\s\S]*?)<\/blockquote>/gi, (match, type, content) => {
+        const lower = type.toLowerCase();
+        let label = 'Note';
+        if (lower === 'tip') label = 'Tip';
+        if (lower === 'warning') label = 'Warning';
+        return `<div class="callout-box ${lower}"><div class="font-semibold text-xs uppercase tracking-wider mb-1">${label}</div><div class="text-sm opacity-90">${content.replace(/^<br\s*\/?>/i, '')}</div></div>`;
+      });
+    }
+
+    let renderTimer = null;
+
+    function setSaveState(isSaving) {
+      if (!dom.saveStatusIndicator || !dom.saveStatusDot) return;
+      if (isSaving) {
+        dom.saveStatusIndicator.textContent = 'Saving...';
+        dom.saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 pulse-saving';
+      } else {
+        dom.saveStatusIndicator.textContent = 'Saved';
+        dom.saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors duration-300';
+      }
+    }
+
+    function renderMarkdown() {
+      if (!dom.markdownInput) return;
+      const rawText = dom.markdownInput.value;
+      const currentDoc = getActiveDoc();
+      if (currentDoc) {
+        currentDoc.content = rawText;
+        currentDoc.updatedAt = Date.now();
+        saveDocs();
+      }
+
+      setSaveState(true);
+      clearTimeout(renderTimer);
+
+      renderTimer = setTimeout(() => {
+        try {
+          const mathParsed = processMath(rawText);
+          const dirtyHtml = marked.parse(mathParsed);
+          const cleanHtml = DOMPurify.sanitize(dirtyHtml, {
+            ADD_TAGS: ['math', 'mrow', 'mi', 'mo', 'msup', 'msub', 'mfrac', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+            ADD_ATTR: ['display']
+          });
+          const finalHtml = processCallouts(cleanHtml);
+
+          dom.previewPane.innerHTML = finalHtml;
+
+          try {
+            mermaid.run({ querySelector: '.mermaid' });
+          } catch (mErr) {}
+
+          dom.previewPane.querySelectorAll('pre').forEach(pre => {
+            if (pre.querySelector('.mermaid')) return;
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.textContent = 'Copy';
+            btn.addEventListener('click', () => {
+              const code = pre.querySelector('code')?.innerText || pre.innerText;
+              copyText(code, 'Code snippet copied');
+              btn.textContent = 'Copied!';
+              btn.style.borderColor = '#10b981';
+              btn.style.color = '#10b981';
+              setTimeout(() => {
+                btn.textContent = 'Copy';
+                btn.style.borderColor = '';
+                btn.style.color = '';
+              }, 1400);
+            });
+            pre.appendChild(btn);
+          });
+
+          dom.previewPane.querySelectorAll('input[type="checkbox"]').forEach((box, i) => {
+            box.className = 'task-checkbox';
+            box.addEventListener('change', () => {
+              toggleTask(i, box.checked);
+            });
+          });
+
+          renderToc();
+          updateStats(rawText);
+          setSaveState(false);
+        } catch (err) {
+          console.error("Render failed", err);
+          dom.previewPane.innerHTML = `<div class="p-3 text-xs text-red-500 font-mono">Render error: ${escape(err.message)}</div>`;
+          setSaveState(false);
+        }
+      }, 70);
+
+      updateLineNumbers();
+    }
+
+    function toggleTask(index, checked) {
+      let cur = 0;
+      const lines = dom.markdownInput.value.split('\n');
+      const reg = /^(\s*[-*]\s+)\[([ xX])\](\s+.*)$/;
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(reg);
+        if (m) {
+          if (cur === index) {
+            lines[i] = `${m[1]}[${checked ? 'x' : ' '}]${m[3]}`;
+            break;
+          }
+          cur++;
+        }
+      }
+      dom.markdownInput.value = lines.join('\n');
+      renderMarkdown();
+    }
+
+    function updateStats(text) {
+      const words = (text.trim().match(/\S+/g) || []).length;
+      const chars = text.length;
+      const lines = text.split('\n').length;
+      dom.previewStatsWords.textContent = `${words.toLocaleString()} words`;
+      dom.previewStatsReadTime.textContent = `${Math.max(1, Math.ceil(words / 200))} min read`;
+      dom.charCountText.textContent = `${chars.toLocaleString()} chars`;
+      dom.totalLinesText.textContent = `${lines.toLocaleString()} lines`;
+    }
+
+    let headingObserver = null;
+    let isProgrammaticScroll = false;
+    let programmaticScrollTimer = null;
+
+    function renderToc() {
+      const headings = dom.previewPane.querySelectorAll('h1, h2, h3, h4');
+      dom.tocListContainer.innerHTML = '';
+      if (headings.length === 0) {
+        dom.tocListContainer.innerHTML = '<div class="text-[var(--text-faint)] italic py-4 text-center">No headings found</div>';
+        return;
+      }
+
+      headings.forEach((h, idx) => {
+        const hid = 'heading-' + idx;
+        h.id = hid;
+        const tag = h.tagName.toLowerCase();
+        const a = document.createElement('a');
+        a.href = '#' + hid;
+        
+        let indentClass = 'pl-2 text-xs font-medium';
+        if (tag === 'h2') indentClass = 'pl-4 text-xs';
+        else if (tag === 'h3') indentClass = 'pl-6 text-[11px] opacity-90';
+        else if (tag === 'h4') indentClass = 'pl-8 text-[11px] opacity-80';
+
+        a.className = `toc-item block py-1.5 px-2 rounded hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)] transition-all truncate text-[var(--text-muted)] cursor-pointer select-none ${indentClass}`;
+        a.innerHTML = `<span class="opacity-40 text-[9px] uppercase font-mono mr-1.5">${tag}</span><span>${escape(h.textContent.trim())}</span>`;
+        
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          scrollToHeading(idx);
+        });
+        dom.tocListContainer.appendChild(a);
+      });
+
+      setupHeadingObserver();
+    }
+
+    function setupHeadingObserver() {
+      if (headingObserver) headingObserver.disconnect();
+      const headings = dom.previewPane.querySelectorAll('h1, h2, h3, h4');
+      if (!headings.length) return;
+
+      const options = {
+        root: dom.previewPane,
+        rootMargin: '0px 0px -70% 0px',
+        threshold: 0
+      };
+
+      headingObserver = new IntersectionObserver((entries) => {
+        if (isProgrammaticScroll) return;
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            const idx = parseInt(id.replace('heading-', ''), 10);
+            if (!isNaN(idx)) {
+              highlightTocItem(idx, false);
+            }
+          }
+        });
+      }, options);
+
+      headings.forEach(h => headingObserver.observe(h));
+    }
+
+    function highlightTocItem(idx, scrollTocIntoView = false) {
+      const items = dom.tocListContainer.querySelectorAll('.toc-item');
+      items.forEach((item, i) => {
+        if (i === idx) {
+          if (!item.classList.contains('toc-active')) {
+            item.classList.add('toc-active');
+            if (scrollTocIntoView && State.isTocOpen) {
+              const cTop = dom.tocListContainer.scrollTop;
+              const cHeight = dom.tocListContainer.clientHeight;
+              const iTop = item.offsetTop;
+              const iHeight = item.offsetHeight;
+              if (iTop < cTop || iTop + iHeight > cTop + cHeight) {
+                dom.tocListContainer.scrollTop = iTop - cHeight / 2;
+              }
+            }
+          }
+        } else {
+          item.classList.remove('toc-active');
+        }
+      });
+    }
+
+    function scrollEditorToHeading(headingText, headingIdx) {
+      const textarea = dom.markdownInput;
+      if (!textarea) return;
+      const lines = textarea.value.split('\n');
+      let currentHeadingIdx = 0;
+      let targetLineIdx = -1;
+      let targetCharStart = 0;
+
+      const cleanTarget = headingText.replace(/[#*_~`]/g, '').trim().toLowerCase();
+
+      let charOffset = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const match = line.match(/^#{1,6}\s+(.*)$/);
+        if (match) {
+          const cleanLine = match[1].replace(/[#*_~`]/g, '').trim().toLowerCase();
+          if (currentHeadingIdx === headingIdx || cleanLine === cleanTarget) {
+            targetLineIdx = i;
+            targetCharStart = charOffset;
+            break;
+          }
+          currentHeadingIdx++;
+        }
+        charOffset += line.length + 1;
+      }
+
+      if (targetLineIdx !== -1) {
+        const computed = window.getComputedStyle(textarea);
+        const lineH = parseFloat(computed.lineHeight) || 24;
+        const targetScrollTop = Math.max(0, targetLineIdx * lineH - 40);
+
+        textarea.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth'
+        });
+        dom.lineNumbers.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth'
+        });
+
+        const lineEnd = targetCharStart + lines[targetLineIdx].length;
+        try {
+          textarea.focus({ preventScroll: true });
+          textarea.setSelectionRange(targetCharStart, lineEnd);
+        } catch (e) {}
+      }
+    }
+
+    function scrollToHeading(headingIndex) {
+      const headings = dom.previewPane.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      const h = headings[headingIndex];
+      if (!h) return;
+
+      const headingText = h.textContent.trim();
+
+      // Flag programmatic smooth jump so synchronized scroll listeners do not fight
+      isProgrammaticScroll = true;
+      clearTimeout(programmaticScrollTimer);
+      programmaticScrollTimer = setTimeout(() => {
+        isProgrammaticScroll = false;
+      }, 500);
+
+      // 1. Scroll and highlight Preview Pane smoothly
+      if (State.viewMode !== 'editor') {
+        const pane = dom.previewPane;
+        const paneRect = pane.getBoundingClientRect();
+        const hRect = h.getBoundingClientRect();
+        const targetTop = pane.scrollTop + (hRect.top - paneRect.top) - 24;
+
+        pane.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: 'smooth'
+        });
+
+        // Trigger dynamic glowing pulse highlight
+        h.classList.remove('heading-target-highlight');
+        void h.offsetWidth; // Force CSS reflow to re-trigger keyframe
+        h.classList.add('heading-target-highlight');
+      }
+
+      // 2. Scroll and select Editor Pane to corresponding markdown heading
+      if (State.viewMode !== 'preview') {
+        scrollEditorToHeading(headingText, headingIndex);
+      }
+
+      // 3. Highlight the active item in Document Detailing
+      highlightTocItem(headingIndex, true);
+
+      // On mobile view, collapse TOC sidebar so content is visible
+      if (window.innerWidth < 768) {
+        State.isTocOpen = false;
+        dom.tocSidebar.classList.add('hidden');
+        dom.tocSidebar.classList.remove('flex');
+      }
+    }
+
+    function updateLineNumbers() {
+      const textarea = dom.markdownInput;
+      if (!textarea || !dom.lineNumbers) return;
+      const text = textarea.value;
+      const lines = text.split('\n');
+      const mirror = document.getElementById('lineMeasureMirror');
+
+      const computed = window.getComputedStyle(textarea);
+      const baseLineH = parseFloat(computed.lineHeight) || 24;
+      const innerWidth = textarea.clientWidth - parseFloat(computed.paddingLeft || 14) - parseFloat(computed.paddingRight || 16);
+
+      if (!mirror || innerWidth <= 0) {
+        let str = '';
+        for (let i = 1; i <= lines.length; i++) {
+          str += `<div style="height:${baseLineH}px;line-height:${baseLineH}px;">${i}</div>`;
+        }
+        dom.lineNumbers.innerHTML = str;
+        return;
+      }
+
+      mirror.style.width = `${innerWidth}px`;
+      mirror.style.fontSize = computed.fontSize;
+      mirror.style.lineHeight = computed.lineHeight;
+      mirror.style.fontFamily = computed.fontFamily;
+      mirror.style.letterSpacing = computed.letterSpacing;
+      mirror.style.wordBreak = 'break-word';
+      mirror.style.whiteSpace = 'pre-wrap';
+
+      let str = '';
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        mirror.textContent = line.length > 0 ? line : '\u00A0';
+        const measuredH = Math.round(mirror.getBoundingClientRect().height);
+        const finalH = Math.max(baseLineH, measuredH || baseLineH);
+        str += `<div style="height:${finalH}px;line-height:${baseLineH}px;">${i + 1}</div>`;
+      }
+      dom.lineNumbers.innerHTML = str;
+    }
+
+    let isSyncingToPreview = false;
+    let isSyncingToEditor = false;
+
+    // Instant zero-delay 1:1 scroll sync without animation queues or timeout blocks
+    dom.markdownInput.addEventListener('scroll', () => {
+      dom.lineNumbers.scrollTop = dom.markdownInput.scrollTop;
+
+      if (!State.syncScroll || State.viewMode !== 'split' || isProgrammaticScroll) return;
+
+      if (isSyncingToEditor) {
+        isSyncingToEditor = false;
+        return;
+      }
+
+      isSyncingToPreview = true;
+      const el = dom.markdownInput;
+      const target = dom.previewPane;
+      const maxEditor = el.scrollHeight - el.clientHeight;
+      const maxPreview = target.scrollHeight - target.clientHeight;
+
+      if (maxEditor > 0 && maxPreview > 0) {
+        target.scrollTop = (el.scrollTop / maxEditor) * maxPreview;
+      } else if (el.scrollTop === 0) {
+        target.scrollTop = 0;
+      }
+    }, { passive: true });
+
+    dom.previewPane.addEventListener('scroll', () => {
+      if (!State.syncScroll || State.viewMode !== 'split' || isProgrammaticScroll) return;
+
+      if (isSyncingToPreview) {
+        isSyncingToPreview = false;
+        return;
+      }
+
+      isSyncingToEditor = true;
+      const el = dom.previewPane;
+      const target = dom.markdownInput;
+      const maxPreview = el.scrollHeight - el.clientHeight;
+      const maxEditor = target.scrollHeight - target.clientHeight;
+
+      if (maxPreview > 0 && maxEditor > 0) {
+        const newTop = (el.scrollTop / maxPreview) * maxEditor;
+        target.scrollTop = newTop;
+        dom.lineNumbers.scrollTop = newTop;
+      } else if (el.scrollTop === 0) {
+        target.scrollTop = 0;
+        dom.lineNumbers.scrollTop = 0;
+      }
+    }, { passive: true });
+
+    function updateSyncScrollUI() {
+      const isOn = State.syncScroll;
+      const statusLabel = isOn ? 'ON' : 'OFF';
+      const textClass = isOn ? 'font-semibold text-emerald-600 dark:text-emerald-400' : 'font-semibold text-[var(--text-muted)]';
+      const dotClass = isOn ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors' : 'w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600 transition-colors';
+
+      if (dom.syncScrollStatus) {
+        dom.syncScrollStatus.textContent = statusLabel;
+        dom.syncScrollStatus.className = textClass;
+      }
+      if (dom.toolbarSyncScrollStatus) {
+        dom.toolbarSyncScrollStatus.textContent = statusLabel;
+        dom.toolbarSyncScrollStatus.className = textClass;
+      }
+      if (dom.syncStatusDot) dom.syncStatusDot.className = dotClass;
+      if (dom.toolbarSyncStatusDot) dom.toolbarSyncStatusDot.className = dotClass;
+      if (dom.syncIconSvg) dom.syncIconSvg.classList.toggle('opacity-50', !isOn);
+    }
+
+    function toggleSyncScroll() {
+      State.syncScroll = !State.syncScroll;
+      updateSyncScrollUI();
+      showToast(`Synchronous Scrolling: ${State.syncScroll ? 'Enabled (ON)' : 'Disabled (OFF)'}`);
+    }
+
+    dom.toggleSyncScrollBtn?.addEventListener('click', toggleSyncScroll);
+    dom.toolbarSyncScrollBtn?.addEventListener('click', toggleSyncScroll);
+
+    function applyFormat(type) {
+      const textarea = dom.markdownInput;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = textarea.value.substring(start, end);
+
+      if (type === 'link') {
+        openCustomModal('Insert Link', 'Link Title', selected || 'Link Text', 'URL', 'https://', (t, u) => {
+          textarea.setRangeText(`[${t}](${u})`, start, end, 'end');
+          renderMarkdown();
+        });
+        return;
+      }
+
+      if (type === 'image') {
+        openCustomModal('Insert Image', 'Alt Text', selected || 'Image Description', 'Image URL', 'https://placehold.co/600x400/fafafa/09090b?text=Image', (t, u) => {
+          textarea.setRangeText(`![${t}](${u})`, start, end, 'end');
+          renderMarkdown();
+        });
+        return;
+      }
+
+      let rep = '';
+      switch (type) {
+        case 'bold': rep = `**${selected || 'bold text'}**`; break;
+        case 'italic': rep = `*${selected || 'italic text'}*`; break;
+        case 'strikethrough': rep = `~~${selected || 'strikethrough'}~~`; break;
+        case 'h1': rep = `\n# ${selected || 'Heading 1'}\n`; break;
+        case 'h2': rep = `\n## ${selected || 'Heading 2'}\n`; break;
+        case 'h3': rep = `\n### ${selected || 'Heading 3'}\n`; break;
+        case 'quote': rep = `\n> ${selected || 'Blockquote'}\n`; break;
+        case 'code-inline': rep = `\`${selected || 'code'}\``; break;
+        case 'code-block': rep = `\n\`\`\`javascript\n${selected || '// code block'}\n\`\`\`\n`; break;
+        case 'ul': rep = `\n- ${selected || 'List item'}\n- Item 2\n`; break;
+        case 'ol': rep = `\n1. ${selected || 'First item'}\n2. Second item\n`; break;
+        case 'task': rep = `\n- [ ] ${selected || 'New task'}\n`; break;
+        case 'table': rep = `\n| Header 1 | Header 2 |\n| :--- | :--- |\n| Cell 1 | Cell 2 |\n`; break;
+        case 'math': rep = `\n$$\n${selected || 'e = mc^2'}\n$$\n`; break;
+        case 'diagram': rep = `\n\`\`\`mermaid\ngraph TD\n    A[Start] --> B[Finish]\n\`\`\`\n`; break;
+      }
+
+      textarea.focus();
+      textarea.setRangeText(rep, start, end, 'end');
+      renderMarkdown();
+    }
+
+    dom.markdownInput.addEventListener('keydown', (e) => {
+      const textarea = dom.markdownInput;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          const before = textarea.value.substring(0, start);
+          const lineStart = before.lastIndexOf('\n') + 1;
+          const currentLine = textarea.value.substring(lineStart, end);
+          if (currentLine.startsWith('  ')) {
+            textarea.setSelectionRange(lineStart, lineStart + 2);
+            textarea.setRangeText('', lineStart, lineStart + 2, 'end');
+          }
+        } else {
+          textarea.setRangeText('  ', start, end, 'end');
+        }
+        renderMarkdown();
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        const textBefore = textarea.value.substring(0, start);
+        const curLine = textBefore.split('\n').pop();
+        const taskM = curLine.match(/^(\s*[-*]\s+)\[([ xX])\]\s*(.*)$/);
+        if (taskM) {
+          e.preventDefault();
+          if (!taskM[3].trim()) {
+            textarea.setRangeText('', start - curLine.length, start, 'end');
+          } else {
+            textarea.setRangeText(`\n${taskM[1]}[ ] `, start, start, 'end');
+          }
+          renderMarkdown();
+          return;
+        }
+
+        const bulletM = curLine.match(/^(\s*[-*]\s+)(.*)$/);
+        if (bulletM) {
+          e.preventDefault();
+          if (!bulletM[2].trim()) {
+            textarea.setRangeText('', start - curLine.length, start, 'end');
+          } else {
+            textarea.setRangeText(`\n${bulletM[1]}`, start, start, 'end');
+          }
+          renderMarkdown();
+          return;
+        }
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'b' || e.key === 'B') { e.preventDefault(); applyFormat('bold'); }
+        if (e.key === 'i' || e.key === 'I') { e.preventDefault(); applyFormat('italic'); }
+        if (e.key === 'k' || e.key === 'K') { e.preventDefault(); applyFormat('link'); }
+        if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFindReplace(true); }
+        if (e.key === 's' || e.key === 'S') { e.preventDefault(); persistCurrentState(); showToast('Document saved'); }
+        if (e.key === '\\') { e.preventDefault(); toggleSidebar(); }
+      }
+    });
+
+    function escapeRegExp(str) {
+      return (str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function scrollTextareaToOffset(charIndex, charEnd) {
+      const textarea = dom.markdownInput;
+      if (!textarea) return;
+
+      const text = textarea.value;
+      const textBefore = text.substring(0, charIndex);
+      const lineIndex = textBefore.split('\n').length - 1;
+
+      // Locate the exact line offset using the mirrored line number gutter
+      let targetY = 0;
+      if (dom.lineNumbers && dom.lineNumbers.children[lineIndex]) {
+        targetY = dom.lineNumbers.children[lineIndex].offsetTop;
+      } else {
+        const computed = window.getComputedStyle(textarea);
+        const lineH = parseFloat(computed.lineHeight) || 24;
+        targetY = lineIndex * lineH + 16;
+      }
+
+      // Smoothly center the match in the viewport
+      const viewportH = textarea.clientHeight || 360;
+      const scrollToY = Math.max(0, targetY - (viewportH * 0.35));
+
+      textarea.scrollTo({
+        top: scrollToY,
+        behavior: 'smooth'
+      });
+
+      if (dom.lineNumbers) {
+        dom.lineNumbers.scrollTo({
+          top: scrollToY,
+          behavior: 'smooth'
+        });
+      }
+
+      // Keep preview pane aligned to matching position in split/preview view
+      if (dom.previewPane) {
+        const maxEditor = textarea.scrollHeight - textarea.clientHeight;
+        const maxPreview = dom.previewPane.scrollHeight - dom.previewPane.clientHeight;
+        if (maxEditor > 0 && maxPreview > 0) {
+          const previewY = (scrollToY / maxEditor) * maxPreview;
+          dom.previewPane.scrollTo({
+            top: previewY,
+            behavior: 'smooth'
+          });
+        }
+      }
+    }
+
+    function highlightPreviewMatch(query, matchIndex) {
+      if (!dom.previewPane || !query) return;
+
+      dom.previewPane.querySelectorAll('.find-highlight-active').forEach(el => {
+        el.classList.remove('find-highlight-active');
+      });
+
+      const cleanQ = query.trim().toLowerCase();
+      if (!cleanQ) return;
+
+      const candidates = dom.previewPane.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, td, th, pre, code');
+      let matchedEl = null;
+      let count = 0;
+
+      for (const el of candidates) {
+        if (el.textContent.toLowerCase().includes(cleanQ)) {
+          if (count === matchIndex || !matchedEl) {
+            matchedEl = el;
+          }
+          if (count === matchIndex) break;
+          count++;
+        }
+      }
+
+      if (matchedEl) {
+        matchedEl.classList.remove('find-highlight-active');
+        void matchedEl.offsetWidth;
+        matchedEl.classList.add('find-highlight-active');
+        matchedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function toggleFindReplace(forceOpen = false) {
+      const bar = dom.findReplaceBar;
+      if (forceOpen || bar.classList.contains('hidden')) {
+        bar.classList.remove('hidden');
+        bar.classList.add('animate-drawer');
+        if (State.viewMode === 'preview') {
+          setViewMode('split');
+          showToast('Switched to Dual View to display find matches');
+        }
+        dom.findInput.focus();
+        dom.findInput.select();
+        performSearch();
+      } else {
+        bar.classList.add('hidden');
+        dom.lineNumbers.querySelectorAll('.line-match-active').forEach(el => {
+          el.classList.remove('line-match-active');
+        });
+        dom.markdownInput.focus();
+      }
+    }
+
+    function performSearch() {
+      const q = dom.findInput.value;
+      const text = dom.markdownInput.value;
+      State.findMatches = [];
+
+      if (!q) {
+        dom.findMatchCount.textContent = '0/0';
+        dom.findMatchCount.className = 'text-[10px] text-[var(--text-faint)] ml-1.5 font-mono';
+        dom.findPrevBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        dom.findNextBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        dom.lineNumbers.querySelectorAll('.line-match-active').forEach(el => {
+          el.classList.remove('line-match-active');
+        });
+        return;
+      }
+
+      // Case-insensitive match gathering across full document
+      const lowerText = text.toLowerCase();
+      const lowerQ = q.toLowerCase();
+      let idx = 0;
+      while ((idx = lowerText.indexOf(lowerQ, idx)) !== -1) {
+        State.findMatches.push(idx);
+        idx += lowerQ.length;
+      }
+
+      if (State.findMatches.length > 0) {
+        dom.findPrevBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+        dom.findNextBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+        dom.findMatchCount.className = 'text-[10px] font-medium text-[var(--text-ink)] ml-1.5 font-mono';
+
+        if (State.currentMatchIdx < 0 || State.currentMatchIdx >= State.findMatches.length) {
+          State.currentMatchIdx = 0;
+        }
+        selectMatch(State.currentMatchIdx, false);
+      } else {
+        State.currentMatchIdx = -1;
+        dom.findPrevBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        dom.findNextBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        dom.findMatchCount.textContent = '0/0';
+        dom.findMatchCount.className = 'text-[10px] text-red-500 font-semibold ml-1.5 font-mono';
+        dom.lineNumbers.querySelectorAll('.line-match-active').forEach(el => {
+          el.classList.remove('line-match-active');
+        });
+      }
+    }
+
+    function selectMatch(mIdx, focusEditor = false) {
+      if (mIdx < 0 || mIdx >= State.findMatches.length) return;
+      State.currentMatchIdx = mIdx;
+      const pos = State.findMatches[mIdx];
+      const q = dom.findInput.value;
+      const text = dom.markdownInput.value;
+
+      // Highlight selection in editor
+      dom.markdownInput.setSelectionRange(pos, pos + q.length);
+      if (focusEditor) {
+        dom.markdownInput.focus();
+      }
+
+      // Smoothly scroll editor, gutter and preview to found match
+      scrollTextareaToOffset(pos, pos + q.length);
+
+      // Highlight matching line number in gutter
+      const textBefore = text.substring(0, pos);
+      const lineIdx = textBefore.split('\n').length - 1;
+      const colIdx = pos - textBefore.lastIndexOf('\n');
+
+      dom.lineNumbers.querySelectorAll('.line-match-active').forEach(el => {
+        el.classList.remove('line-match-active');
+      });
+      if (dom.lineNumbers.children[lineIdx]) {
+        dom.lineNumbers.children[lineIdx].classList.add('line-match-active');
+      }
+
+      if (dom.cursorPosText) {
+        dom.cursorPosText.textContent = `Ln ${lineIdx + 1}, Col ${colIdx}`;
+      }
+
+      dom.findMatchCount.textContent = `${mIdx + 1}/${State.findMatches.length}`;
+      highlightPreviewMatch(q, mIdx);
+    }
+
+    function findNext() {
+      if (!State.findMatches.length) return;
+      const next = (State.currentMatchIdx + 1) % State.findMatches.length;
+      selectMatch(next, false);
+    }
+
+    function findPrev() {
+      if (!State.findMatches.length) return;
+      const prev = (State.currentMatchIdx - 1 + State.findMatches.length) % State.findMatches.length;
+      selectMatch(prev, false);
+    }
+
+    dom.findInput.addEventListener('input', performSearch);
+
+    dom.findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) findPrev();
+        else findNext();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        findNext();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        findPrev();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        toggleFindReplace(false);
+      }
+    });
+
+    dom.replaceInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dom.replaceBtn.click();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        toggleFindReplace(false);
+      }
+    });
+
+    dom.findNextBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      findNext();
+    });
+
+    dom.findPrevBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      findPrev();
+    });
+
+    dom.replaceBtn.addEventListener('click', () => {
+      if (State.currentMatchIdx === -1 || !State.findMatches.length) return;
+      const rep = dom.replaceInput.value;
+      const pos = State.findMatches[State.currentMatchIdx];
+      const q = dom.findInput.value;
+      dom.markdownInput.setRangeText(rep, pos, pos + q.length, 'end');
+      renderMarkdown();
+      performSearch();
+    });
+
+    dom.replaceAllBtn.addEventListener('click', () => {
+      const q = dom.findInput.value;
+      const rep = dom.replaceInput.value;
+      if (!q) return;
+      const text = dom.markdownInput.value;
+      const reg = new RegExp(escapeRegExp(q), 'gi');
+      const count = (text.match(reg) || []).length;
+      if (count === 0) {
+        showToast('No matches found to replace');
+        return;
+      }
+      dom.markdownInput.value = text.replace(reg, rep);
+      renderMarkdown();
+      performSearch();
+      showToast(`Replaced ${count} match${count > 1 ? 'es' : ''}`);
+    });
+
+    dom.closeFindReplaceBtn.addEventListener('click', () => toggleFindReplace(false));
+    document.getElementById('toggleFindReplaceBtn').addEventListener('click', () => toggleFindReplace());
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        if (!dom.findReplaceBar.classList.contains('hidden')) {
+          if (e.shiftKey) findPrev();
+          else findNext();
+        } else {
+          toggleFindReplace(true);
+        }
+      }
+    });
+
+    function loadDocs() {
+      const hasVisited = localStorage.getItem('dropmd_has_visited');
+
+      try {
+        const raw = localStorage.getItem('dropmd_docs');
+        if (raw) State.docs = JSON.parse(raw);
+      } catch (e) {
+        console.error("Failed to load documents", e);
+      }
+
+      if (!hasVisited) {
+        localStorage.setItem('dropmd_has_visited', 'true');
+        const initDoc = {
+          id: 'doc_' + Date.now(),
+          title: 'Welcome.md',
+          content: FIRST_VISIT_TEMP_CONTENT,
+          updatedAt: Date.now()
+        };
+        State.docs = [initDoc];
+        State.activeDocId = initDoc.id;
+      } else {
+        if (!State.docs || !State.docs.length) {
+          const blankDoc = {
+            id: 'doc_' + Date.now(),
+            title: 'Untitled.md',
+            content: '',
+            updatedAt: Date.now()
+          };
+          State.docs = [blankDoc];
+          State.activeDocId = blankDoc.id;
+        } else {
+          const lastActiveId = localStorage.getItem('dropmd_active_id');
+          const found = State.docs.find(d => d.id === lastActiveId);
+          State.activeDocId = found ? found.id : State.docs[0].id;
+        }
+      }
+
+      try {
+        const draftRaw = localStorage.getItem('dropmd_active_draft');
+        if (draftRaw) {
+          const draft = JSON.parse(draftRaw);
+          if (draft && draft.id === State.activeDocId && typeof draft.content === 'string') {
+            const active = State.docs.find(d => d.id === draft.id);
+            if (active && (!active.updatedAt || draft.timestamp >= active.updatedAt)) {
+              active.content = draft.content;
+              if (draft.title) active.title = draft.title;
+              active.updatedAt = draft.timestamp;
+            }
+          }
+        }
+      } catch (err) {}
+
+      saveDocs();
+    }
+
+    function saveDocs() {
+      try {
+        localStorage.setItem('dropmd_docs', JSON.stringify(State.docs));
+        if (State.activeDocId) {
+          localStorage.setItem('dropmd_active_id', State.activeDocId);
+        }
+
+        const active = getActiveDoc();
+        if (active && dom.markdownInput) {
+          const draftSnapshot = {
+            id: active.id,
+            title: active.title,
+            content: dom.markdownInput.value,
+            cursorStart: dom.markdownInput.selectionStart,
+            cursorEnd: dom.markdownInput.selectionEnd,
+            scrollTop: dom.markdownInput.scrollTop,
+            timestamp: Date.now()
+          };
+          localStorage.setItem('dropmd_active_draft', JSON.stringify(draftSnapshot));
+        }
+      } catch (e) {
+        console.error("Save failed", e);
+      }
+    }
+
+    function persistCurrentState() {
+      const doc = getActiveDoc();
+      if (doc && dom.markdownInput) {
+        doc.content = dom.markdownInput.value;
+        if (dom.docTitleInput) doc.title = dom.docTitleInput.value || 'Untitled.md';
+        doc.updatedAt = Date.now();
+        saveDocs();
+      }
+    }
+
+    function getActiveDoc() {
+      if (!State.docs || !State.docs.length) {
+        const blankDoc = {
+          id: 'doc_' + Date.now(),
+          title: 'Untitled.md',
+          content: '',
+          updatedAt: Date.now()
+        };
+        State.docs = [blankDoc];
+        State.activeDocId = blankDoc.id;
+        return blankDoc;
+      }
+      const found = State.docs.find(d => d.id === State.activeDocId);
+      if (!found) {
+        State.activeDocId = State.docs[0].id;
+        return State.docs[0];
+      }
+      return found;
+    }
+
+    function createNewDoc(title = 'Untitled.md', content = '') {
+      const doc = {
+        id: 'doc_' + Date.now(),
+        title,
+        content,
+        updatedAt: Date.now()
+      };
+      State.docs.unshift(doc);
+      State.activeDocId = doc.id;
+      saveDocs();
+      renderDocShelf();
+      loadDocToEditor();
+      showToast('Created new document');
+    }
+
+    function deleteDoc(id) {
+      State.docs = State.docs.filter(d => d.id !== id);
+
+      if (State.docs.length === 0) {
+        const freshDoc = {
+          id: 'doc_' + Date.now(),
+          title: 'Untitled.md',
+          content: '',
+          updatedAt: Date.now()
+        };
+        State.docs = [freshDoc];
+        State.activeDocId = freshDoc.id;
+        showToast('Document removed. Workspace is clean.');
+      } else {
+        if (State.activeDocId === id) {
+          State.activeDocId = State.docs[0].id;
+        }
+        showToast('Document deleted');
+      }
+
+      saveDocs();
+      renderDocShelf();
+      loadDocToEditor();
+    }
+
+    function renderDocShelf() {
+      const search = (dom.searchDocsInput.value || '').toLowerCase().trim();
+      dom.docListContainer.innerHTML = '';
+      const list = State.docs.filter(d => d.title.toLowerCase().includes(search) || d.content.toLowerCase().includes(search));
+
+      if (list.length === 0) {
+        dom.docListContainer.innerHTML = '<div class="text-[var(--text-faint)] text-xs text-center py-4">No documents found</div>';
+        return;
+      }
+
+      list.forEach(doc => {
+        const isAct = doc.id === State.activeDocId;
+        const item = document.createElement('div');
+        item.className = `doc-item-row group flex items-center justify-between px-2.5 py-1.5 rounded cursor-pointer text-xs ${
+          isAct ? 'bg-[var(--bg-canvas)] font-medium border shadow-xs text-[var(--text-ink)] translate-x-1' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]'
+        }`;
+        item.innerHTML = `
+          <span class="truncate mr-1 flex-1">${escape(doc.title)}</span>
+          <button title="Delete document" class="del-btn opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-500 rounded transition-opacity duration-150">
+            <svg class="icon-svg" style="width:12px;height:12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        `;
+        item.addEventListener('click', () => {
+          State.activeDocId = doc.id;
+          saveDocs();
+          renderDocShelf();
+          loadDocToEditor();
+          if (window.innerWidth < 1024) toggleSidebar(false);
+        });
+        item.querySelector('.del-btn').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          deleteDoc(doc.id);
+        });
+        dom.docListContainer.appendChild(item);
+      });
+    }
+
+    function loadDocToEditor() {
+      const doc = getActiveDoc();
+      dom.docTitleInput.value = doc.title;
+      dom.markdownInput.value = doc.content;
+      renderMarkdown();
+
+      try {
+        const draftRaw = localStorage.getItem('dropmd_active_draft');
+        if (draftRaw) {
+          const draft = JSON.parse(draftRaw);
+          if (draft && draft.id === doc.id) {
+            if (typeof draft.cursorStart === 'number') {
+              dom.markdownInput.setSelectionRange(draft.cursorStart, draft.cursorEnd || draft.cursorStart);
+            }
+            if (typeof draft.scrollTop === 'number') {
+              dom.markdownInput.scrollTop = draft.scrollTop;
+              dom.lineNumbers.scrollTop = draft.scrollTop;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    dom.docTitleInput.addEventListener('input', () => {
+      const doc = getActiveDoc();
+      doc.title = dom.docTitleInput.value || 'Untitled.md';
+      saveDocs();
+      renderDocShelf();
+    });
+
+    function exportFile(type) {
+      const doc = getActiveDoc();
+      if (type === 'md') {
+        const fname = doc.title.endsWith('.md') ? doc.title : `${doc.title}.md`;
+        downloadBlob(dom.markdownInput.value, fname, 'text/markdown');
+        showToast('Exported Markdown');
+      } else if (type === 'html') {
+        const fname = doc.title.replace(/\.[^/.]+$/, '') + '.html';
+        const page = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escape(doc.title)}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"><style>body{font-family:system-ui,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;line-height:1.75;}pre{background:#f4f4f5;padding:1rem;border-radius:6px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #e4e4e7;padding:8px 12px;}</style></head><body>${dom.previewPane.innerHTML}</body></html>`;
+        downloadBlob(page, fname, 'text/html');
+        showToast('Exported HTML');
+      } else if (type === 'pdf') {
+        window.print();
+      }
+    }
+
+    function downloadBlob(content, filename, type) {
+      const blob = new Blob([content], { type: `${type};charset=utf-8` });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function copyText(str, msg = 'Copied to clipboard') {
+      const temp = document.createElement('textarea');
+      temp.value = str;
+      temp.style.position = 'fixed';
+      temp.style.left = '-9999px';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      try {
+        document.execCommand('copy');
+        showToast(msg);
+      } catch (e) {
+        showToast('Failed to copy');
+      }
+      document.body.removeChild(temp);
+    }
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'bg-[var(--text-ink)] text-[var(--bg-canvas)] text-xs px-3.5 py-2 rounded-lg shadow-xl pointer-events-auto border border-[var(--border-hairline)] animate-toast';
+      toast.textContent = msg;
+      dom.toastContainer.appendChild(toast);
+      setTimeout(() => {
+        toast.style.transition = 'all 0.25s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px) scale(0.95)';
+        setTimeout(() => toast.remove(), 250);
+      }, 2200);
+    }
+
+    function escape(str) {
+      return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    let modalCallback = null;
+    function openCustomModal(title, placeholder1, val1, placeholder2, val2, onConfirm) {
+      dom.customModalTitle.textContent = title;
+      dom.modalInput1.placeholder = placeholder1;
+      dom.modalInput1.value = val1;
+      dom.modalInput2.placeholder = placeholder2;
+      dom.modalInput2.value = val2;
+      modalCallback = onConfirm;
+      dom.customModal.classList.remove('hidden');
+      dom.modalInput1.focus();
+    }
+
+    dom.modalCancelBtn.addEventListener('click', () => dom.customModal.classList.add('hidden'));
+    dom.modalConfirmBtn.addEventListener('click', () => {
+      if (modalCallback) modalCallback(dom.modalInput1.value, dom.modalInput2.value);
+      dom.customModal.classList.add('hidden');
+    });
+
+    function setViewMode(mode) {
+      State.viewMode = mode;
+      const btnEditor = document.getElementById('modeEditorBtn');
+      const btnSplit = document.getElementById('modeSplitBtn');
+      const btnPreview = document.getElementById('modePreviewBtn');
+
+      [btnEditor, btnSplit, btnPreview].forEach(btn => {
+        if (!btn) return;
+        btn.classList.remove('bg-[var(--bg-canvas)]', 'text-[var(--text-ink)]', 'shadow-xs');
+        btn.classList.add('text-[var(--text-muted)]');
+      });
+
+      if (mode === 'editor') {
+        btnEditor?.classList.add('bg-[var(--bg-canvas)]', 'text-[var(--text-ink)]', 'shadow-xs');
+        btnEditor?.classList.remove('text-[var(--text-muted)]');
+        dom.editorContainer.classList.remove('hidden');
+        dom.editorContainer.style.flex = '1 1 100%';
+        dom.editorContainer.style.width = '100%';
+        dom.previewContainer.classList.add('hidden');
+        dom.resizerDivider.classList.add('hidden');
+      } else if (mode === 'preview') {
+        btnPreview?.classList.add('bg-[var(--bg-canvas)]', 'text-[var(--text-ink)]', 'shadow-xs');
+        btnPreview?.classList.remove('text-[var(--text-muted)]');
+        dom.editorContainer.classList.add('hidden');
+        dom.previewContainer.classList.remove('hidden');
+        dom.previewContainer.style.flex = '1 1 100%';
+        dom.previewContainer.style.width = '100%';
+        dom.resizerDivider.classList.add('hidden');
+      } else {
+        btnSplit?.classList.add('bg-[var(--bg-canvas)]', 'text-[var(--text-ink)]', 'shadow-xs');
+        btnSplit?.classList.remove('text-[var(--text-muted)]');
+        dom.editorContainer.classList.remove('hidden');
+        dom.previewContainer.classList.remove('hidden');
+        applySplitRatio(State.splitRatio || 50);
+        if (window.innerWidth >= 768) {
+          dom.resizerDivider.classList.remove('hidden');
+        } else {
+          dom.resizerDivider.classList.add('hidden');
+        }
+      }
+      requestAnimationFrame(updateLineNumbers);
+    }
+
+    function applySplitRatio(pct) {
+      if (State.viewMode !== 'split') return;
+      const p = Math.max(15, Math.min(85, pct));
+      State.splitRatio = p;
+      dom.editorContainer.style.flex = `0 0 ${p}%`;
+      dom.editorContainer.style.width = `${p}%`;
+      dom.previewContainer.style.flex = `0 0 ${100 - p}%`;
+      dom.previewContainer.style.width = `${100 - p}%`;
+    }
+
+    let isDraggingDivider = false;
+    let resizeRafId = null;
+    let cachedWorkspaceRect = null;
+
+    function startDividerDrag(e) {
+      if (State.viewMode !== 'split') return;
+      isDraggingDivider = true;
+      dom.resizerDivider.classList.add('resizing');
+      document.body.classList.add('is-resizing');
+
+      const splitWorkspace = document.getElementById('splitWorkspace');
+      if (splitWorkspace) {
+        cachedWorkspaceRect = splitWorkspace.getBoundingClientRect();
+      }
+
+      if (e && e.pointerId !== undefined && dom.resizerDivider.setPointerCapture) {
+        try {
+          dom.resizerDivider.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+    }
+
+    function moveDividerDrag(clientX) {
+      if (!isDraggingDivider) return;
+
+      if (!cachedWorkspaceRect) {
+        const splitWorkspace = document.getElementById('splitWorkspace');
+        if (splitWorkspace) cachedWorkspaceRect = splitWorkspace.getBoundingClientRect();
+        if (!cachedWorkspaceRect) return;
+      }
+
+      const totalW = cachedWorkspaceRect.width;
+      if (totalW <= 0) return;
+
+      const relativeX = clientX - cachedWorkspaceRect.left;
+      let pct = (relativeX / totalW) * 100;
+      pct = Math.max(15, Math.min(85, pct));
+
+      applySplitRatio(pct);
+
+      if (!resizeRafId) {
+        resizeRafId = requestAnimationFrame(() => {
+          resizeRafId = null;
+          updateLineNumbers();
+        });
+      }
+    }
+
+    function stopDividerDrag(e) {
+      if (!isDraggingDivider) return;
+      isDraggingDivider = false;
+      cachedWorkspaceRect = null;
+      dom.resizerDivider.classList.remove('resizing');
+      document.body.classList.remove('is-resizing');
+
+      if (e && e.pointerId !== undefined && dom.resizerDivider.releasePointerCapture) {
+        try {
+          dom.resizerDivider.releasePointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+
+      try {
+        if (State.splitRatio) {
+          localStorage.setItem('dropmd_split_ratio', State.splitRatio.toFixed(2));
+        }
+      } catch (err) {}
+
+      updateLineNumbers();
+    }
+
+    // Modern Pointer Events for frictionless mouse & touch tracking
+    dom.resizerDivider.addEventListener('pointerdown', (e) => {
+      startDividerDrag(e);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (isDraggingDivider) {
+        moveDividerDrag(e.clientX);
+      }
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      stopDividerDrag(e);
+    });
+
+    window.addEventListener('pointercancel', (e) => {
+      stopDividerDrag(e);
+    });
+
+    // Double-click to instantly restore 50/50 balance
+    dom.resizerDivider.addEventListener('dblclick', () => {
+      applySplitRatio(50);
+      try {
+        localStorage.setItem('dropmd_split_ratio', '50');
+      } catch (e) {}
+      updateLineNumbers();
+      showToast('Reset split ratio to 50:50');
+    });
+
+    function applyFontSize(size) {
+      State.fontSize = size;
+      const px = `${size}px`;
+      const lh = `${Math.round(size * 1.84)}px`;
+      dom.markdownInput.style.fontSize = px;
+      dom.markdownInput.style.lineHeight = lh;
+      dom.lineNumbers.style.fontSize = px;
+      dom.lineNumbers.style.lineHeight = lh;
+      const mirror = document.getElementById('lineMeasureMirror');
+      if (mirror) {
+        mirror.style.fontSize = px;
+        mirror.style.lineHeight = lh;
+      }
+      try {
+        localStorage.setItem('dropmd_font_size', size.toString());
+      } catch (e) {}
+      updateLineNumbers();
+    }
+
+    document.getElementById('fontSizeIncBtn').addEventListener('click', () => {
+      applyFontSize(Math.min(22, State.fontSize + 1));
+    });
+    document.getElementById('fontSizeDecBtn').addEventListener('click', () => {
+      applyFontSize(Math.max(11, State.fontSize - 1));
+    });
+
+    function toggleSidebar(show) {
+      State.isSidebarOpen = show !== undefined ? show : !State.isSidebarOpen;
+      const isDesktop = window.innerWidth >= 1024;
+      const toggleBtn = document.getElementById('toggleSidebarBtn');
+
+      if (State.isSidebarOpen) {
+        dom.sidebar.classList.remove('hidden');
+        dom.sidebar.classList.add('flex');
+        if (toggleBtn) {
+          toggleBtn.classList.add('bg-[var(--bg-surface-subtle)]', 'text-[var(--text-ink)]');
+          toggleBtn.classList.remove('text-[var(--text-muted)]');
+        }
+        if (!isDesktop) {
+          dom.sidebarBackdrop.classList.remove('hidden');
+        } else {
+          dom.sidebarBackdrop.classList.add('hidden');
+        }
+      } else {
+        dom.sidebar.classList.add('hidden');
+        dom.sidebar.classList.remove('flex');
+        if (toggleBtn) {
+          toggleBtn.classList.remove('bg-[var(--bg-surface-subtle)]', 'text-[var(--text-ink)]');
+          toggleBtn.classList.add('text-[var(--text-muted)]');
+        }
+        dom.sidebarBackdrop.classList.add('hidden');
+      }
+    }
+
+    dom.sidebarBackdrop.addEventListener('click', () => toggleSidebar(false));
+    document.getElementById('toggleSidebarBtn').addEventListener('click', () => toggleSidebar());
+    document.getElementById('closeSidebarBtn')?.addEventListener('click', () => toggleSidebar(false));
+
+    function toggleTocSidebar(show) {
+      State.isTocOpen = show !== undefined ? show : !State.isTocOpen;
+      dom.tocSidebar.classList.toggle('hidden', !State.isTocOpen);
+      dom.tocSidebar.classList.toggle('flex', State.isTocOpen);
+      if (State.isTocOpen) {
+        renderToc();
+      }
+    }
+
+    document.getElementById('toggleTocBtn').addEventListener('click', () => toggleTocSidebar());
+    document.getElementById('closeTocBtn').addEventListener('click', () => toggleTocSidebar(false));
+
+    dom.exportDropdownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = dom.exportMenu.classList.contains('hidden');
+      dom.exportMenu.classList.toggle('hidden', !isHidden);
+      dom.exportArrowIcon.classList.toggle('rotate-180', isHidden);
+    });
+
+    window.addEventListener('click', () => {
+      dom.exportMenu.classList.add('hidden');
+      dom.exportArrowIcon.classList.remove('rotate-180');
+    });
+
+    document.getElementById('exportMdBtn').addEventListener('click', () => exportFile('md'));
+    document.getElementById('exportHtmlBtn').addEventListener('click', () => exportFile('html'));
+    document.getElementById('exportPdfBtn').addEventListener('click', () => exportFile('pdf'));
+    document.getElementById('copyMarkdownBtn').addEventListener('click', () => copyText(dom.markdownInput.value, 'Markdown copied'));
+    document.getElementById('copyHtmlBtn').addEventListener('click', () => copyText(dom.previewPane.innerHTML, 'HTML copied'));
+
+    document.querySelectorAll('#toolbar [data-format]').forEach(btn => {
+      btn.addEventListener('click', () => applyFormat(btn.getAttribute('data-format')));
+    });
+
+    document.getElementById('clearEditorBtn').addEventListener('click', () => {
+      dom.markdownInput.value = '';
+      const active = getActiveDoc();
+      if (active) {
+        active.content = '';
+        active.updatedAt = Date.now();
+        saveDocs();
+      }
+      renderMarkdown();
+      showToast('Editor cleared');
+    });
+
+    document.getElementById('newDocBtn').addEventListener('click', () => createNewDoc());
+    dom.searchDocsInput.addEventListener('input', renderDocShelf);
+
+    document.getElementById('openShortcutsBtn').addEventListener('click', () => dom.shortcutsModal.classList.remove('hidden'));
+    document.getElementById('closeShortcutsModalBtn').addEventListener('click', () => dom.shortcutsModal.classList.add('hidden'));
+    document.getElementById('closeShortcutsModalBtn2').addEventListener('click', () => dom.shortcutsModal.classList.add('hidden'));
+
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dom.dropZone.classList.remove('hidden');
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (e.clientX <= 0 || e.clientY <= 0) dom.dropZone.classList.add('hidden');
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dom.dropZone.classList.add('hidden');
+      if (e.dataTransfer.files.length) {
+        const file = e.dataTransfer.files[0];
+        const r = new FileReader();
+        r.onload = ev => createNewDoc(file.name, ev.target.result);
+        r.readAsText(file);
+      }
+    });
+
+    document.getElementById('fileUploadInput').addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        const file = e.target.files[0];
+        const r = new FileReader();
+        r.onload = ev => createNewDoc(file.name, ev.target.result);
+        r.readAsText(file);
+      }
+    });
+
+    document.getElementById('modeEditorBtn').addEventListener('click', () => setViewMode('editor'));
+    document.getElementById('modeSplitBtn').addEventListener('click', () => setViewMode('split'));
+    document.getElementById('modePreviewBtn').addEventListener('click', () => setViewMode('preview'));
+
+    dom.markdownInput.addEventListener('input', () => {
+      renderMarkdown();
+      persistCurrentState();
+    });
+
+    dom.markdownInput.addEventListener('blur', persistCurrentState);
+
+    ['click', 'keyup', 'select'].forEach(ev => {
+      dom.markdownInput.addEventListener(ev, () => {
+        const val = dom.markdownInput.value.substring(0, dom.markdownInput.selectionStart);
+        const l = val.split('\n').length;
+        const c = val.split('\n').pop().length + 1;
+        dom.cursorPosText.textContent = `Ln ${l}, Col ${c}`;
+      });
+    });
+
+    window.addEventListener('beforeunload', persistCurrentState);
+    window.addEventListener('pagehide', persistCurrentState);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        persistCurrentState();
+      }
+    });
+
+    function bootApp() {
+      loadDocs();
+      initTheme();
+      updateBrowserTabFavicon();
+      renderDocShelf();
+
+      const savedFontSize = parseFloat(localStorage.getItem('dropmd_font_size') || '13');
+      if (!isNaN(savedFontSize)) {
+        applyFontSize(savedFontSize);
+      }
+
+      const savedRatio = parseFloat(localStorage.getItem('dropmd_split_ratio') || '50');
+      if (!isNaN(savedRatio) && savedRatio >= 15 && savedRatio <= 85) {
+        State.splitRatio = savedRatio;
+      } else {
+        State.splitRatio = 50;
+      }
+
+      loadDocToEditor();
+      updateSyncScrollUI();
+
+      toggleSidebar(window.innerWidth >= 1024);
+
+      if (window.innerWidth < 768) {
+        setViewMode('editor');
+      } else {
+        setViewMode('split');
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      const isDesktop = window.innerWidth >= 1024;
+      if (isDesktop) {
+        dom.sidebarBackdrop.classList.add('hidden');
+      } else if (State.isSidebarOpen) {
+        dom.sidebarBackdrop.classList.remove('hidden');
+      }
+      updateLineNumbers();
+    });
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', bootApp);
+    } else {
+      bootApp();
+    }
+  </script>
+</body>
+</html>

@@ -13,6 +13,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   
   <!-- Tailwind CSS Framework -->
+  <script>
+    // Suppress Tailwind CDN console warning
+    window.process = { env: { NODE_ENV: 'production' } };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- Marked.js Markdown Engine -->
@@ -87,8 +91,8 @@
 
     #lineNumbers, #markdownInput, #lineMeasureMirror {
       font-family: 'JetBrains Mono', monospace !important;
-      font-size: 13px !important;
-      line-height: 24px !important;
+      font-size: 13px;
+      line-height: 24px;
       box-sizing: border-box !important;
       letter-spacing: 0;
     }
@@ -186,6 +190,11 @@
       50% { opacity: 0.35; transform: scale(0.85); }
     }
 
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     @keyframes dropTargetPulse {
       0%, 100% { border-color: var(--text-ink); background-color: rgba(125, 125, 125, 0.08); }
       50% { border-color: var(--text-muted); background-color: rgba(125, 125, 125, 0.14); }
@@ -194,6 +203,17 @@
     @keyframes spinThemeIcon {
       0% { transform: rotate(0deg) scale(0.7); opacity: 0; }
       100% { transform: rotate(360deg) scale(1); opacity: 1; }
+    }
+
+    @keyframes deleteConfirmSlideIn {
+      0% { opacity: 0; transform: translateY(-8px) scale(0.9); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes shakeNo {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
     }
 
     /* Heading pulse and glowing focus highlight */
@@ -278,11 +298,41 @@
     .animate-toast { animation: toastSpringUp 0.3s var(--ease-spring) forwards; }
     .animate-drawer { animation: drawerSlideDown 0.22s var(--ease-out-expo) forwards; }
     .animate-spin-icon { animation: spinThemeIcon 0.38s var(--ease-spring); }
+    .animate-delete-confirm { animation: deleteConfirmSlideIn 0.2s var(--ease-out-expo) forwards; }
+    .animate-shake { animation: shakeNo 0.3s ease-in-out; }
     .pulse-saving { animation: gentlePulse 1.2s infinite ease-in-out; }
     .drop-active { animation: dropTargetPulse 1.8s infinite ease-in-out; }
+    .spinner { animation: spin 0.8s linear infinite; }
+
+    /* Inline rename input */
+    .inline-rename-input {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      padding: 2px 6px;
+      border: 2px solid #3b82f6;
+      border-radius: 4px;
+      background: var(--bg-canvas);
+      color: var(--text-ink);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      width: 100%;
+    }
+
+    /* Delete confirmation popup */
+    .delete-confirm-popup {
+      position: absolute;
+      z-index: 9999;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 8px;
+      min-width: 180px;
+    }
 
     .doc-item-row {
       transition: transform 0.18s var(--ease-out-expo), background-color 0.15s ease, color 0.15s ease;
+      position: relative;
     }
     .doc-item-row:hover {
       transform: translateX(3px);
@@ -612,6 +662,32 @@
         display: none !important;
       }
     }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 0.5rem;
+      }
+      #toolbar {
+        padding: 0.25rem 0.5rem;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      #toolbar button {
+        padding: 0.25rem 0.5rem;
+      }
+      .prose-preview {
+        font-size: 0.9rem;
+        padding: 0.5rem;
+      }
+      #statusBar {
+        font-size: 10px;
+        padding: 0.25rem 0.5rem;
+      }
+      #markdownInput {
+        font-size: 12px;
+        padding: 0.5rem;
+      }
+    }
   </style>
 </head>
 
@@ -644,10 +720,10 @@
           class="text-xs font-medium bg-transparent px-1.5 sm:px-2 py-1 rounded border border-transparent hover:border-[var(--border-hairline)] focus:border-[var(--border-hairline)] focus:bg-[var(--bg-surface)] focus:outline-none truncate w-24 xs:w-32 sm:w-44 md:w-56 transition-all duration-150"
         />
         
-        <!-- Live Status Pill -->
-        <div id="saveStatusBadge" class="hidden lg:flex items-center space-x-1 text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface-subtle)] px-2 py-0.5 rounded-full transition-all duration-200">
-          <span id="saveStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors duration-200"></span>
-          <span id="saveStatusIndicator">Saved</span>
+        <!-- Live Status Pill - Always Visible -->
+        <div id="saveStatusBadge" class="flex items-center space-x-1 text-[11px] font-medium bg-[var(--bg-surface-subtle)] px-2.5 py-1 rounded-md border border-[var(--border-hairline)] transition-all duration-200 shadow-sm">
+          <span id="saveStatusDot" class="w-2 h-2 rounded-full bg-emerald-500 transition-colors duration-200"></span>
+          <span id="saveStatusIndicator" class="text-[var(--text-ink)]">Saved</span>
         </div>
       </div>
     </div>
@@ -706,6 +782,11 @@
           <button id="exportPdfBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
             <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
             Print / PDF
+          </button>
+          <div class="h-px my-1" style="background: var(--border-hairline);"></div>
+          <button id="exportAllMdBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2 font-semibold">
+            <svg class="icon-svg text-[var(--text-muted)]" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Export All as .md
           </button>
           <div class="h-px my-1" style="background: var(--border-hairline);"></div>
           <button id="copyMarkdownBtn" class="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)] flex items-center gap-2">
@@ -837,6 +918,12 @@
           <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Documents</span>
         </div>
         <div class="flex items-center space-x-1">
+          <!-- Sort Dropdown -->
+          <select id="docSortSelect" title="Sort documents" class="text-xs px-1.5 py-0.5 rounded border bg-[var(--bg-canvas)] text-[var(--text-ink)] hover:bg-[var(--bg-surface-subtle)] cursor-pointer">
+            <option value="updated">Recent</option>
+            <option value="name">Name</option>
+            <option value="created">Oldest</option>
+          </select>
           <button id="newDocBtn" title="Create Blank Document" class="p-1 sm:p-1.5 hover:bg-[var(--bg-surface-subtle)] rounded flex items-center gap-1 text-xs">
             <svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
             <span class="hidden sm:inline">New</span>
@@ -888,6 +975,16 @@
       <div id="resizerDivider" class="hidden md:block" title="Drag to resize (Double click to reset 50:50)"></div>
 
       <section id="previewContainer" class="flex-1 flex flex-col h-full overflow-hidden min-w-0" style="background: var(--bg-canvas);">
+        <!-- Loading Spinner -->
+        <div id="previewLoader" class="hidden absolute inset-0 flex items-center justify-center bg-[var(--bg-canvas)] z-10">
+          <div class="flex flex-col items-center gap-3">
+            <svg class="spinner w-8 h-8 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" opacity="0.25"/>
+              <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+            </svg>
+            <span class="text-xs text-[var(--text-muted)]">Rendering...</span>
+          </div>
+        </div>
         <div id="previewPane" class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pt-4 pb-12 prose-preview max-w-3xl mx-auto w-full select-text cursor-auto"></div>
       </section>
     </div>
@@ -919,6 +1016,11 @@
       <span id="previewStatsWords" class="font-medium text-[var(--text-ink)]">0 words</span>
       <span class="text-[var(--border-hairline)] hidden xs:inline">•</span>
       <span id="previewStatsReadTime" class="hidden xs:inline">1 min read</span>
+      <span class="text-[var(--border-hairline)] hidden md:inline">•</span>
+      <button id="storageInfoBtn" class="hidden md:flex items-center gap-1 hover:text-[var(--text-ink)] cursor-pointer transition-colors" title="Click to check storage usage">
+        <svg class="icon-svg" style="width:12px;height:12px;" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        <span id="storageUsageText">Storage</span>
+      </button>
     </div>
 
     <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
@@ -963,6 +1065,12 @@
         <div class="py-2 flex items-center justify-between"><span>Find & Replace</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+F</kbd></div>
         <div class="py-2 flex items-center justify-between"><span>Toggle Documents Shelf</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+\</kbd></div>
         <div class="py-2 flex items-center justify-between"><span>Save Snapshot</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Ctrl+S</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>New Document</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-blue-50">Ctrl+N</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Delete Document</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-red-50">Ctrl+W</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Undo</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-green-50">Ctrl+Z</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Redo</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-green-50">Ctrl+Y</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Next Document</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-purple-50">Ctrl+Tab</kbd></div>
+        <div class="py-2 flex items-center justify-between"><span>Previous Document</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px] bg-purple-50">Ctrl+Shift+Tab</kbd></div>
         <div class="py-2 flex items-center justify-between"><span>Indent / Outdent</span><kbd class="px-2 py-0.5 border rounded font-mono text-[10px]">Tab / Shift+Tab</kbd></div>
       </div>
       <div class="p-3 border-t text-right" style="background: var(--bg-surface);">
@@ -974,42 +1082,6 @@
   <div id="toastContainer" class="fixed bottom-10 right-5 z-50 flex flex-col space-y-2 pointer-events-none select-none"></div>
 
   <script>
-    const FIRST_VISIT_TEMP_CONTENT = `# Welcome to dropmd
-
-A distraction-free markdown studio designed with an ultra-minimal plane layout, fluid animations, and real-time live preview.
-
-> [!NOTE]
-> This introductory document is loaded only on your first visit. You can edit this directly, click **Clear** in the ribbon, or delete this file from the left shelf to start with a blank workspace.
-
----
-
-## ⚡ Mathematical Proofs (KaTeX)
-
-Inline equations such as $e^{i\\pi} + 1 = 0$ work alongside full display formulas:
-
-$$f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi$$
-
----
-
-## 📋 Interactive Task Tracking
-
-- [x] Responsive split view editor
-- [x] Dynamic light/dark browser tab icon
-- [x] Synchronized line numbers and smooth scrolling
-- [ ] Document detailing instant jump and glowing highlight
-
----
-
-## 💻 Algorithmic Code Highlighting
-
-\`\`\`javascript
-// Automatic instant local preservation
-function saveNote(content) {
-  localStorage.setItem('dropmd_docs', JSON.stringify(content));
-}
-\`\`\`
-`;
-
     const State = {
       docs: [],
       activeDocId: null,
@@ -1021,7 +1093,9 @@ function saveNote(content) {
       theme: 'light',
       findMatches: [],
       currentMatchIdx: -1,
-      splitRatio: 50
+      splitRatio: 50,
+      undoStack: [],
+      redoStack: []
     };
 
     const dom = {
@@ -1031,6 +1105,7 @@ function saveNote(content) {
       saveStatusIndicator: document.getElementById('saveStatusIndicator'),
       markdownInput: document.getElementById('markdownInput'),
       previewPane: document.getElementById('previewPane'),
+      previewLoader: document.getElementById('previewLoader'),
       lineNumbers: document.getElementById('lineNumbers'),
       editorContainer: document.getElementById('editorContainer'),
       previewContainer: document.getElementById('previewContainer'),
@@ -1231,15 +1306,18 @@ function saveNote(content) {
     }
 
     let renderTimer = null;
+    let mermaidRenderTimer = null;
 
     function setSaveState(isSaving) {
       if (!dom.saveStatusIndicator || !dom.saveStatusDot) return;
       if (isSaving) {
         dom.saveStatusIndicator.textContent = 'Saving...';
-        dom.saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 pulse-saving';
+        dom.saveStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400 pulse-saving';
+        dom.saveStatusBadge.style.borderColor = 'rgba(251, 191, 36, 0.3)';
       } else {
         dom.saveStatusIndicator.textContent = 'Saved';
-        dom.saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 transition-colors duration-300';
+        dom.saveStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 transition-colors duration-300';
+        dom.saveStatusBadge.style.borderColor = '';
       }
     }
 
@@ -1247,30 +1325,59 @@ function saveNote(content) {
       if (!dom.markdownInput) return;
       const rawText = dom.markdownInput.value;
       const currentDoc = getActiveDoc();
+      
       if (currentDoc) {
         currentDoc.content = rawText;
         currentDoc.updatedAt = Date.now();
-        saveDocs();
+        // Debounced save - don't save on every keystroke
+        debouncedSave();
       }
 
       setSaveState(true);
       clearTimeout(renderTimer);
 
+      // Adaptive debounce - longer delay for large documents
+      const isLarge = rawText.length > 10000;
+      const delay = isLarge ? 300 : 70;
+
       renderTimer = setTimeout(() => {
-        try {
-          const mathParsed = processMath(rawText);
-          const dirtyHtml = marked.parse(mathParsed);
-          const cleanHtml = DOMPurify.sanitize(dirtyHtml, {
-            ADD_TAGS: ['math', 'mrow', 'mi', 'mo', 'msup', 'msub', 'mfrac', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-            ADD_ATTR: ['display']
-          });
-          const finalHtml = processCallouts(cleanHtml);
+        renderPreviewHTML(rawText);
+      }, delay);
 
-          dom.previewPane.innerHTML = finalHtml;
+      updateLineNumbers();
+    }
 
+    function renderPreviewHTML(rawText) {
+        // Show loader for large documents
+        const isLarge = rawText.length > 5000;
+        const isVeryLarge = rawText.length > 20000;
+        
+        if (isLarge && dom.previewLoader) {
+          dom.previewLoader.classList.remove('hidden');
+        }
+        
+        // Use requestAnimationFrame for very large documents to prevent UI blocking
+        const doRender = () => {
           try {
-            mermaid.run({ querySelector: '.mermaid' });
-          } catch (mErr) {}
+            const mathParsed = processMath(rawText);
+            const dirtyHtml = marked.parse(mathParsed);
+            const cleanHtml = DOMPurify.sanitize(dirtyHtml, {
+              ADD_TAGS: ['math', 'mrow', 'mi', 'mo', 'msup', 'msub', 'mfrac', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+              ADD_ATTR: ['display']
+            });
+            const finalHtml = processCallouts(cleanHtml);
+
+            dom.previewPane.innerHTML = finalHtml;
+
+          // Debounced Mermaid rendering - expensive operation
+          clearTimeout(mermaidRenderTimer);
+          mermaidRenderTimer = setTimeout(() => {
+            try {
+              mermaid.run({ querySelector: '.mermaid' });
+            } catch (mErr) {
+              console.warn('Mermaid render failed:', mErr);
+            }
+          }, 500); // Wait 500ms after typing stops
 
           dom.previewPane.querySelectorAll('pre').forEach(pre => {
             if (pre.querySelector('.mermaid')) return;
@@ -1302,14 +1409,27 @@ function saveNote(content) {
           renderToc();
           updateStats(rawText);
           setSaveState(false);
+          
+          // Hide loader
+          if (dom.previewLoader) {
+            dom.previewLoader.classList.add('hidden');
+          }
         } catch (err) {
           console.error("Render failed", err);
           dom.previewPane.innerHTML = `<div class="p-3 text-xs text-red-500 font-mono">Render error: ${escape(err.message)}</div>`;
           setSaveState(false);
+          if (dom.previewLoader) {
+            dom.previewLoader.classList.add('hidden');
+          }
         }
-      }, 70);
-
-      updateLineNumbers();
+      };
+      
+      // Use requestAnimationFrame for very large docs to prevent blocking
+      if (isVeryLarge) {
+        requestAnimationFrame(doRender);
+      } else {
+        doRender();
+      }
     }
 
     function toggleTask(index, checked) {
@@ -1350,6 +1470,11 @@ function saveNote(content) {
       if (headings.length === 0) {
         dom.tocListContainer.innerHTML = '<div class="text-[var(--text-faint)] italic py-4 text-center">No headings found</div>';
         return;
+      }
+
+      // Auto-open TOC if document has many headings
+      if (headings.length >= 5 && !State.isTocOpen && window.innerWidth >= 1024) {
+        toggleTocSidebar(true);
       }
 
       headings.forEach((h, idx) => {
@@ -1522,7 +1647,17 @@ function saveNote(content) {
       }
     }
 
+    let lineNumberUpdateTimer = null;
+    
     function updateLineNumbers() {
+      // Debounce for fast typing
+      clearTimeout(lineNumberUpdateTimer);
+      lineNumberUpdateTimer = setTimeout(() => {
+        updateLineNumbersImmediate();
+      }, 50);
+    }
+    
+    function updateLineNumbersImmediate() {
       const textarea = dom.markdownInput;
       if (!textarea || !dom.lineNumbers) return;
       const text = textarea.value;
@@ -1639,6 +1774,36 @@ function saveNote(content) {
 
     dom.toggleSyncScrollBtn?.addEventListener('click', toggleSyncScroll);
     dom.toolbarSyncScrollBtn?.addEventListener('click', toggleSyncScroll);
+
+    // Storage info button - show detailed storage usage
+    document.getElementById('storageInfoBtn')?.addEventListener('click', () => {
+      const info = checkStorageQuota();
+      if (info) {
+        const { sizeMB, usagePercent } = info;
+        let statusEmoji = '✅';
+        let statusMsg = 'healthy';
+        if (usagePercent >= 95) {
+          statusEmoji = '❌';
+          statusMsg = 'critical';
+        } else if (usagePercent >= 80) {
+          statusEmoji = '⚠️';
+          statusMsg = 'high';
+        }
+        showToast(`${statusEmoji} Storage: ${sizeMB.toFixed(2)}MB / 5MB (${usagePercent.toFixed(1)}%) - ${statusMsg}`, 
+          usagePercent >= 95 ? 'error' : usagePercent >= 80 ? 'warning' : 'default');
+        // Update the button text
+        document.getElementById('storageUsageText').textContent = `${sizeMB.toFixed(1)}MB`;
+      }
+    });
+
+    // Update storage display on boot
+    function updateStorageDisplay() {
+      const info = checkStorageQuota();
+      if (info) {
+        const { sizeMB } = info;
+        document.getElementById('storageUsageText').textContent = `${sizeMB.toFixed(1)}MB`;
+      }
+    }
 
     function applyFormat(type) {
       const textarea = dom.markdownInput;
@@ -2015,6 +2180,49 @@ function saveNote(content) {
     document.getElementById('toggleFindReplaceBtn').addEventListener('click', () => toggleFindReplace());
 
     window.addEventListener('keydown', (e) => {
+      // Ctrl+N - New Document
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        createNewDoc();
+        return;
+      }
+      
+      // Ctrl+W - Delete Current Document
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        const doc = getActiveDoc();
+        if (doc) deleteDoc(doc.id);
+        return;
+      }
+      
+      // Ctrl+Z - Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      
+      // Ctrl+Y or Ctrl+Shift+Z - Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      
+      // Ctrl+Tab - Next Document
+      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        switchToNextDoc();
+        return;
+      }
+      
+      // Ctrl+Shift+Tab - Previous Document
+      if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        switchToPrevDoc();
+        return;
+      }
+      
       if (e.key === 'F3') {
         e.preventDefault();
         if (!dom.findReplaceBar.classList.contains('hidden')) {
@@ -2025,6 +2233,30 @@ function saveNote(content) {
         }
       }
     });
+
+    function switchToNextDoc() {
+      if (!State.docs || State.docs.length <= 1) return;
+      const idx = State.docs.findIndex(d => d.id === State.activeDocId);
+      const nextIdx = (idx + 1) % State.docs.length;
+      persistCurrentState();
+      State.activeDocId = State.docs[nextIdx].id;
+      saveDocs();
+      renderDocShelf();
+      loadDocToEditor();
+      showToast(`Switched to ${State.docs[nextIdx].title}`);
+    }
+
+    function switchToPrevDoc() {
+      if (!State.docs || State.docs.length <= 1) return;
+      const idx = State.docs.findIndex(d => d.id === State.activeDocId);
+      const prevIdx = (idx - 1 + State.docs.length) % State.docs.length;
+      persistCurrentState();
+      State.activeDocId = State.docs[prevIdx].id;
+      saveDocs();
+      renderDocShelf();
+      loadDocToEditor();
+      showToast(`Switched to ${State.docs[prevIdx].title}`);
+    }
 
     function loadDocs() {
       const hasVisited = localStorage.getItem('dropmd_has_visited');
@@ -2038,24 +2270,12 @@ function saveNote(content) {
 
       if (!hasVisited) {
         localStorage.setItem('dropmd_has_visited', 'true');
-        const initDoc = {
-          id: 'doc_' + Date.now(),
-          title: 'Welcome.md',
-          content: FIRST_VISIT_TEMP_CONTENT,
-          updatedAt: Date.now()
-        };
-        State.docs = [initDoc];
-        State.activeDocId = initDoc.id;
+        State.docs = [];
+        State.activeDocId = null;
       } else {
         if (!State.docs || !State.docs.length) {
-          const blankDoc = {
-            id: 'doc_' + Date.now(),
-            title: 'Untitled.md',
-            content: '',
-            updatedAt: Date.now()
-          };
-          State.docs = [blankDoc];
-          State.activeDocId = blankDoc.id;
+          State.docs = [];
+          State.activeDocId = null;
         } else {
           const lastActiveId = localStorage.getItem('dropmd_active_id');
           const found = State.docs.find(d => d.id === lastActiveId);
@@ -2101,32 +2321,51 @@ function saveNote(content) {
           };
           localStorage.setItem('dropmd_active_draft', JSON.stringify(draftSnapshot));
         }
+        
+        // Check storage quota periodically (every 10 saves)
+        if (!window.saveCallCount) window.saveCallCount = 0;
+        window.saveCallCount++;
+        if (window.saveCallCount % 10 === 0) {
+          checkStorageQuota();
+          updateStorageDisplay();
+        }
       } catch (e) {
         console.error("Save failed", e);
+        // Check if it's a quota exceeded error
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+          showToast('❌ Storage quota exceeded! Please export and delete some documents to free space.', 'error');
+        } else {
+          showToast('❌ Save failed. Check console for details.', 'error');
+        }
       }
+    }
+
+    // Debounced save - batch saves to reduce localStorage writes
+    let saveTimer = null;
+    function debouncedSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveDocs();
+      }, 800); // Save 800ms after user stops typing
     }
 
     function persistCurrentState() {
       const doc = getActiveDoc();
       if (doc && dom.markdownInput) {
         doc.content = dom.markdownInput.value;
-        if (dom.docTitleInput) doc.title = dom.docTitleInput.value || 'Untitled.md';
+        if (dom.docTitleInput) doc.title = sanitizeTitle(dom.docTitleInput.value);
         doc.updatedAt = Date.now();
+        // Save cursor position in document
+        doc.cursorStart = dom.markdownInput.selectionStart;
+        doc.cursorEnd = dom.markdownInput.selectionEnd;
+        doc.scrollTop = dom.markdownInput.scrollTop;
         saveDocs();
       }
     }
 
     function getActiveDoc() {
       if (!State.docs || !State.docs.length) {
-        const blankDoc = {
-          id: 'doc_' + Date.now(),
-          title: 'Untitled.md',
-          content: '',
-          updatedAt: Date.now()
-        };
-        State.docs = [blankDoc];
-        State.activeDocId = blankDoc.id;
-        return blankDoc;
+        return null;
       }
       const found = State.docs.find(d => d.id === State.activeDocId);
       if (!found) {
@@ -2137,9 +2376,11 @@ function saveNote(content) {
     }
 
     function createNewDoc(title = 'Untitled.md', content = '') {
+      // Sanitize title to prevent XSS
+      const sanitizedTitle = sanitizeTitle(title);
       const doc = {
         id: 'doc_' + Date.now(),
-        title,
+        title: sanitizedTitle,
         content,
         updatedAt: Date.now()
       };
@@ -2151,24 +2392,153 @@ function saveNote(content) {
       showToast('Created new document');
     }
 
+    // Inline rename - Windows Explorer style
+    function startInlineRename(itemElement, doc) {
+      const titleSpan = itemElement.querySelector('.doc-title-display');
+      if (!titleSpan) return;
+      
+      // Create input element
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = doc.title;
+      input.className = 'inline-rename-input';
+      
+      // Replace title with input
+      titleSpan.style.display = 'none';
+      titleSpan.parentElement.insertBefore(input, titleSpan);
+      
+      // Focus and select all text
+      input.focus();
+      input.select();
+      
+      // Function to commit rename
+      const commitRename = () => {
+        const newTitle = sanitizeTitle(input.value);
+        
+        // Check if name changed
+        if (newTitle !== doc.title) {
+          doc.title = newTitle;
+          
+          // Update top bar if this is the active document
+          if (State.activeDocId === doc.id) {
+            dom.docTitleInput.value = doc.title;
+          }
+          
+          saveDocs();
+          showToast('Document renamed', 'success');
+        }
+        
+        // Re-render shelf to restore normal view
+        renderDocShelf();
+      };
+      
+      // Function to cancel rename
+      const cancelRename = () => {
+        renderDocShelf();
+      };
+      
+      // Handle Enter key - commit
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitRename();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelRename();
+        }
+      });
+      
+      // Handle blur - commit on focus loss
+      input.addEventListener('blur', () => {
+        commitRename();
+      });
+      
+      // Prevent click from bubbling (don't switch documents)
+      input.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    // Delete confirmation popup near delete button
+    function showDeleteConfirm(buttonElement, doc) {
+      // Remove any existing popup
+      const existingPopup = document.querySelector('.delete-confirm-popup');
+      if (existingPopup) existingPopup.remove();
+      
+      // Create popup
+      const popup = document.createElement('div');
+      popup.className = 'delete-confirm-popup animate-delete-confirm';
+      popup.innerHTML = `
+        <div class="text-xs mb-2">
+          <div class="font-semibold text-[var(--text-ink)] mb-1 flex items-center gap-1">
+            <svg class="icon-svg text-red-500" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Delete Document?
+          </div>
+          <div class="text-[var(--text-muted)] truncate max-w-[150px]" title="${escape(doc.title)}">${escape(doc.title)}</div>
+        </div>
+        <div class="flex gap-1.5">
+          <button class="confirm-delete-btn flex-1 px-2 py-1 text-xs font-medium bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
+            Delete
+          </button>
+          <button class="cancel-delete-btn flex-1 px-2 py-1 text-xs font-medium border border-[var(--border-hairline)] rounded hover:bg-[var(--bg-surface-subtle)] transition-colors">
+            Cancel
+          </button>
+        </div>
+      `;
+      
+      // Position popup near the button
+      const rect = buttonElement.getBoundingClientRect();
+      popup.style.position = 'fixed';
+      popup.style.top = `${rect.bottom + 5}px`;
+      popup.style.right = `${window.innerWidth - rect.right}px`;
+      
+      document.body.appendChild(popup);
+      
+      // Confirm delete
+      popup.querySelector('.confirm-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        popup.remove();
+        deleteDoc(doc.id);
+      });
+      
+      // Cancel delete
+      popup.querySelector('.cancel-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        popup.classList.add('animate-shake');
+        setTimeout(() => popup.remove(), 300);
+      });
+      
+      // Close on click outside
+      const closeHandler = (e) => {
+        if (!popup.contains(e.target) && e.target !== buttonElement) {
+          popup.remove();
+          document.removeEventListener('click', closeHandler);
+        }
+      };
+      setTimeout(() => {
+        document.addEventListener('click', closeHandler);
+      }, 50);
+    }
+
     function deleteDoc(id) {
+      const doc = State.docs.find(d => d.id === id);
+      if (!doc) return;
+      
+      // No confirmation needed - already confirmed in popup
       State.docs = State.docs.filter(d => d.id !== id);
 
       if (State.docs.length === 0) {
-        const freshDoc = {
-          id: 'doc_' + Date.now(),
-          title: 'Untitled.md',
-          content: '',
-          updatedAt: Date.now()
-        };
-        State.docs = [freshDoc];
-        State.activeDocId = freshDoc.id;
-        showToast('Document removed. Workspace is clean.');
+        State.activeDocId = null;
+        showToast('Document removed. Workspace is clean.', 'success');
       } else {
         if (State.activeDocId === id) {
           State.activeDocId = State.docs[0].id;
         }
-        showToast('Document deleted');
+        showToast('Document deleted', 'success');
       }
 
       saveDocs();
@@ -2178,8 +2548,39 @@ function saveNote(content) {
 
     function renderDocShelf() {
       const search = (dom.searchDocsInput.value || '').toLowerCase().trim();
+      const sortBy = document.getElementById('docSortSelect')?.value || 'updated';
       dom.docListContainer.innerHTML = '';
-      const list = State.docs.filter(d => d.title.toLowerCase().includes(search) || d.content.toLowerCase().includes(search));
+      
+      if (!State.docs || !State.docs.length) {
+        dom.docListContainer.innerHTML = `
+          <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <svg class="w-16 h-16 text-[var(--text-faint)] mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M12 18v-6"/>
+              <path d="M9 15l3-3 3 3"/>
+            </svg>
+            <p class="text-sm font-medium text-[var(--text-ink)] mb-1">No documents yet</p>
+            <p class="text-xs text-[var(--text-muted)] mb-4">Start typing in the editor or press <kbd class="px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] border text-[10px] font-mono">Ctrl+N</kbd></p>
+          </div>
+        `;
+        return;
+      }
+      
+      let list = State.docs.filter(d => d.title.toLowerCase().includes(search) || d.content.toLowerCase().includes(search));
+      
+      // Sort documents
+      if (sortBy === 'name') {
+        list.sort((a, b) => a.title.localeCompare(b.title));
+      } else if (sortBy === 'created') {
+        list.sort((a, b) => {
+          const aId = parseInt(a.id.replace('doc_', ''));
+          const bId = parseInt(b.id.replace('doc_', ''));
+          return aId - bId;
+        });
+      } else { // updated (most recent first)
+        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      }
 
       if (list.length === 0) {
         dom.docListContainer.innerHTML = '<div class="text-[var(--text-faint)] text-xs text-center py-4">No documents found</div>';
@@ -2192,32 +2593,85 @@ function saveNote(content) {
         item.className = `doc-item-row group flex items-center justify-between px-2.5 py-1.5 rounded cursor-pointer text-xs ${
           isAct ? 'bg-[var(--bg-canvas)] font-medium border shadow-xs text-[var(--text-ink)] translate-x-1' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-ink)]'
         }`;
+        item.dataset.docId = doc.id; // Store doc ID for reference
+        
+        // Highlight search matches
+        let displayTitle = escape(doc.title);
+        if (search) {
+          const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+          displayTitle = displayTitle.replace(regex, '<mark style="background:yellow;color:black;">$1</mark>');
+        }
+        
         item.innerHTML = `
-          <span class="truncate mr-1 flex-1">${escape(doc.title)}</span>
-          <button title="Delete document" class="del-btn opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-500 rounded transition-opacity duration-150">
-            <svg class="icon-svg" style="width:12px;height:12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
+          <span class="doc-title-display truncate mr-1 flex-1">${displayTitle}</span>
+          <div class="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100">
+            <button title="Rename document" class="rename-btn p-0.5 hover:text-blue-500 rounded transition-opacity duration-150">
+              <svg class="icon-svg" style="width:12px;height:12px;" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button title="Delete document" class="del-btn p-0.5 hover:text-red-500 rounded transition-opacity duration-150">
+              <svg class="icon-svg" style="width:12px;height:12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
         `;
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+          // Don't switch docs if clicking on rename input
+          if (e.target.classList.contains('inline-rename-input')) return;
+          
+          // Save current document state before switching
+          persistCurrentState();
+          
           State.activeDocId = doc.id;
           saveDocs();
           renderDocShelf();
           loadDocToEditor();
           if (window.innerWidth < 1024) toggleSidebar(false);
         });
+        item.querySelector('.rename-btn').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          startInlineRename(item, doc);
+        });
         item.querySelector('.del-btn').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          deleteDoc(doc.id);
+          showDeleteConfirm(ev.currentTarget, doc);
         });
         dom.docListContainer.appendChild(item);
       });
     }
 
     function loadDocToEditor() {
+      if (!State.docs || !State.docs.length) {
+        dom.docTitleInput.value = '';
+        dom.markdownInput.value = '';
+        dom.previewPane.innerHTML = '';
+        return;
+      }
       const doc = getActiveDoc();
+      
+      if (!doc) {
+        return;
+      }
+      
       dom.docTitleInput.value = doc.title;
       dom.markdownInput.value = doc.content;
-      renderMarkdown();
+      
+      // Restore cursor position from document
+      setTimeout(() => {
+        if (doc.cursorStart !== undefined) {
+          dom.markdownInput.setSelectionRange(doc.cursorStart, doc.cursorEnd || doc.cursorStart);
+        } else {
+          dom.markdownInput.setSelectionRange(0, 0);
+        }
+        if (doc.scrollTop !== undefined) {
+          dom.markdownInput.scrollTop = doc.scrollTop;
+          dom.lineNumbers.scrollTop = doc.scrollTop;
+        }
+        dom.markdownInput.focus();
+      }, 0);
+      
+      // Just render preview WITHOUT going through renderMarkdown
+      setTimeout(() => {
+        renderPreviewHTML(doc.content);
+      }, 0);
 
       try {
         const draftRaw = localStorage.getItem('dropmd_active_draft');
@@ -2238,9 +2692,16 @@ function saveNote(content) {
 
     dom.docTitleInput.addEventListener('input', () => {
       const doc = getActiveDoc();
-      doc.title = dom.docTitleInput.value || 'Untitled.md';
-      saveDocs();
-      renderDocShelf();
+      if (doc) {
+        const sanitized = sanitizeTitle(dom.docTitleInput.value);
+        doc.title = sanitized;
+        // Update input to show sanitized value (prevent XSS display)
+        if (dom.docTitleInput.value !== sanitized) {
+          dom.docTitleInput.value = sanitized;
+        }
+        saveDocs();
+        renderDocShelf();
+      }
     });
 
     function exportFile(type) {
@@ -2257,6 +2718,23 @@ function saveNote(content) {
       } else if (type === 'pdf') {
         window.print();
       }
+    }
+
+    function exportAllDocs() {
+      if (!State.docs || State.docs.length === 0) {
+        showToast('No documents to export');
+        return;
+      }
+      
+      let combined = '';
+      State.docs.forEach((doc, idx) => {
+        if (idx > 0) combined += '\n\n---\n\n';
+        combined += `# ${doc.title}\n\n${doc.content}`;
+      });
+      
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(combined, `dropmd-all-documents-${timestamp}.md`, 'text/markdown');
+      showToast(`Exported ${State.docs.length} documents`, 'success');
     }
 
     function downloadBlob(content, filename, type) {
@@ -2288,21 +2766,89 @@ function saveNote(content) {
       document.body.removeChild(temp);
     }
 
-    function showToast(msg) {
+    function showToast(msg, type = 'default') {
       const toast = document.createElement('div');
-      toast.className = 'bg-[var(--text-ink)] text-[var(--bg-canvas)] text-xs px-3.5 py-2 rounded-lg shadow-xl pointer-events-auto border border-[var(--border-hairline)] animate-toast';
-      toast.textContent = msg;
+      
+      // Icon based on type
+      let icon = '';
+      let bgClass = 'bg-[var(--text-ink)]';
+      let textClass = 'text-[var(--bg-canvas)]';
+      
+      if (type === 'success') {
+        bgClass = 'bg-emerald-500';
+        icon = '<svg class="w-4 h-4 inline-block mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
+      } else if (type === 'error') {
+        bgClass = 'bg-red-500';
+        icon = '<svg class="w-4 h-4 inline-block mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      } else if (type === 'warning') {
+        bgClass = 'bg-amber-500';
+        icon = '<svg class="w-4 h-4 inline-block mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+      } else {
+        icon = '<svg class="w-4 h-4 inline-block mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+      }
+      
+      toast.className = `${bgClass} ${textClass} text-sm font-medium px-4 py-2.5 rounded-lg shadow-2xl pointer-events-auto border border-white/20 animate-toast flex items-center backdrop-blur-sm`;
+      toast.innerHTML = icon + msg;
       dom.toastContainer.appendChild(toast);
       setTimeout(() => {
-        toast.style.transition = 'all 0.25s ease';
+        toast.style.transition = 'all 0.3s ease';
         toast.style.opacity = '0';
-        toast.style.transform = 'translateY(12px) scale(0.95)';
-        setTimeout(() => toast.remove(), 250);
-      }, 2200);
+        toast.style.transform = 'translateY(12px) scale(0.9)';
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
     }
 
     function escape(str) {
       return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // Sanitize user input for document titles (prevent XSS)
+    function sanitizeTitle(title) {
+      if (!title) return 'Untitled.md';
+      // Remove any HTML tags and potentially dangerous characters
+      let sanitized = title
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+        .replace(/<[^>]+>/g, '') // Remove all HTML tags
+        .replace(/javascript:/gi, '') // Remove javascript: protocol
+        .replace(/on\w+\s*=/gi, '') // Remove event handlers like onclick=
+        .trim();
+      
+      // Limit length to prevent storage abuse
+      if (sanitized.length > 200) {
+        sanitized = sanitized.substring(0, 200);
+      }
+      
+      return sanitized || 'Untitled.md';
+    }
+
+    // Check localStorage usage and warn if approaching quota
+    function checkStorageQuota() {
+      try {
+        // Calculate approximate localStorage usage
+        let totalSize = 0;
+        for (let key in localStorage) {
+          if (localStorage.hasOwnProperty(key)) {
+            totalSize += localStorage[key].length + key.length;
+          }
+        }
+        
+        // Convert to MB (approximate, actual encoding may vary)
+        const sizeMB = (totalSize * 2) / (1024 * 1024); // UTF-16 uses 2 bytes per char
+        const quotaMB = 5; // Most browsers limit to ~5-10MB
+        const usagePercent = (sizeMB / quotaMB) * 100;
+        
+        // Warn at 80% usage
+        if (usagePercent >= 80 && usagePercent < 95) {
+          showToast(`⚠️ Storage ${usagePercent.toFixed(0)}% full (${sizeMB.toFixed(1)}MB). Consider exporting older documents.`, 'warning');
+        } else if (usagePercent >= 95) {
+          showToast(`❌ Storage critical (${sizeMB.toFixed(1)}MB / ${quotaMB}MB). Please export and delete documents to free space.`, 'error');
+        }
+        
+        return { sizeMB, usagePercent };
+      } catch (e) {
+        console.error('Could not check storage quota:', e);
+        return null;
+      }
     }
 
     let modalCallback = null;
@@ -2560,6 +3106,7 @@ function saveNote(content) {
     document.getElementById('exportMdBtn').addEventListener('click', () => exportFile('md'));
     document.getElementById('exportHtmlBtn').addEventListener('click', () => exportFile('html'));
     document.getElementById('exportPdfBtn').addEventListener('click', () => exportFile('pdf'));
+    document.getElementById('exportAllMdBtn').addEventListener('click', () => exportAllDocs());
     document.getElementById('copyMarkdownBtn').addEventListener('click', () => copyText(dom.markdownInput.value, 'Markdown copied'));
     document.getElementById('copyHtmlBtn').addEventListener('click', () => copyText(dom.previewPane.innerHTML, 'HTML copied'));
 
@@ -2581,6 +3128,7 @@ function saveNote(content) {
 
     document.getElementById('newDocBtn').addEventListener('click', () => createNewDoc());
     dom.searchDocsInput.addEventListener('input', renderDocShelf);
+    document.getElementById('docSortSelect')?.addEventListener('change', renderDocShelf);
 
     document.getElementById('openShortcutsBtn').addEventListener('click', () => dom.shortcutsModal.classList.remove('hidden'));
     document.getElementById('closeShortcutsModalBtn').addEventListener('click', () => dom.shortcutsModal.classList.add('hidden'));
@@ -2618,11 +3166,94 @@ function saveNote(content) {
     document.getElementById('modePreviewBtn').addEventListener('click', () => setViewMode('preview'));
 
     dom.markdownInput.addEventListener('input', () => {
-      renderMarkdown();
-      persistCurrentState();
+      // Handle first document creation
+      if (!State.docs || !State.docs.length) {
+        const newDoc = {
+          id: 'doc_' + Date.now(),
+          title: 'Untitled.md',
+          content: dom.markdownInput.value,
+          updatedAt: Date.now()
+        };
+        State.docs = [newDoc];
+        State.activeDocId = newDoc.id;
+        
+        // Update the title in the top bar
+        dom.docTitleInput.value = newDoc.title;
+        
+        saveDocs();
+        renderDocShelf();
+        // Render preview only, don't call renderMarkdown (it will save again with wrong content)
+        renderPreviewHTML(dom.markdownInput.value);
+        updateLineNumbers();
+      } else {
+        renderMarkdown();
+        persistCurrentState();
+      }
+      
+      // Undo/Redo functionality (merged into same listener)
+      clearTimeout(undoTimer);
+      undoTimer = setTimeout(() => {
+        const doc = getActiveDoc();
+        if (doc) {
+          State.undoStack.push({
+            docId: doc.id,
+            content: doc.content,
+            cursorStart: dom.markdownInput.selectionStart
+          });
+          if (State.undoStack.length > 50) State.undoStack.shift(); // Limit to 50
+          State.redoStack = []; // Clear redo on new input
+        }
+      }, 500);
     });
 
+    function undo() {
+      if (State.undoStack.length === 0) return;
+      const doc = getActiveDoc();
+      if (!doc) return;
+      
+      State.redoStack.push({
+        docId: doc.id,
+        content: doc.content,
+        cursorStart: dom.markdownInput.selectionStart
+      });
+      
+      const prev = State.undoStack.pop();
+      if (prev && prev.docId === doc.id) {
+        doc.content = prev.content;
+        dom.markdownInput.value = prev.content;
+        dom.markdownInput.setSelectionRange(prev.cursorStart, prev.cursorStart);
+        renderMarkdown();
+        saveDocs();
+      }
+    }
+
+    function redo() {
+      if (State.redoStack.length === 0) return;
+      const doc = getActiveDoc();
+      if (!doc) return;
+      
+      State.undoStack.push({
+        docId: doc.id,
+        content: doc.content,
+        cursorStart: dom.markdownInput.selectionStart
+      });
+      
+      const next = State.redoStack.pop();
+      if (next && next.docId === doc.id) {
+        doc.content = next.content;
+        dom.markdownInput.value = next.content;
+        dom.markdownInput.setSelectionRange(next.cursorStart, next.cursorStart);
+        renderMarkdown();
+        saveDocs();
+      }
+    }
+
     dom.markdownInput.addEventListener('blur', persistCurrentState);
+
+    // Force line number sync on scroll
+    dom.markdownInput.addEventListener('scroll', () => {
+      dom.lineNumbers.scrollTop = dom.markdownInput.scrollTop;
+    });
 
     ['click', 'keyup', 'select'].forEach(ev => {
       dom.markdownInput.addEventListener(ev, () => {
@@ -2643,9 +3274,11 @@ function saveNote(content) {
 
     function bootApp() {
       loadDocs();
+      renderDocShelf();
+      loadDocToEditor();  // MOVE THIS UP - load docs into editor FIRST
+      
       initTheme();
       updateBrowserTabFavicon();
-      renderDocShelf();
 
       const savedFontSize = parseFloat(localStorage.getItem('dropmd_font_size') || '13');
       if (!isNaN(savedFontSize)) {
@@ -2659,8 +3292,8 @@ function saveNote(content) {
         State.splitRatio = 50;
       }
 
-      loadDocToEditor();
       updateSyncScrollUI();
+      updateStorageDisplay(); // Show storage usage on boot
 
       toggleSidebar(window.innerWidth >= 1024);
 
